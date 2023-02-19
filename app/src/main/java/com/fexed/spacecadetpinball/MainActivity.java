@@ -26,6 +26,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.file.DirectoryStream;
 
 import com.fexed.spacecadetpinball.databinding.ActivityMainBinding;
 
@@ -155,10 +156,11 @@ public class MainActivity extends SDLActivity {
         });
     }
 
-    private void copyAssets(File filesDir) {
+    private void copyAssets(File filesDir) { // TODO: Clean this up so it compies *any* subdirectory. Will this cause problems if/when users update? Regardless, this code is UGLY.
         if (!new File(filesDir, "PINBALL.DAT").exists()) {
             AssetManager assetManager = getAssets();
             try {
+                String [] list = assetManager.list(""); // Copy the files in our root directory...
                 for (String asset : assetManager.list("")) {
                     Log.d(TAG, "Copying " + asset);
                     try (InputStream is = assetManager.open(asset)){
@@ -176,6 +178,29 @@ public class MainActivity extends SDLActivity {
             } catch (IOException e) {
                 e.printStackTrace();
             }
+
+            new File(filesDir + File.separator + "SOUND").mkdir(); // Ensure the sound directory has been created.
+            try {
+                String [] list = assetManager.list("SOUND"); // And now copy the sound files
+                for (String asset : assetManager.list("SOUND")){
+                    Log.d(TAG, "Copying " + "SOUND/"+asset);
+                    try (InputStream is = assetManager.open("SOUND/" + asset)){
+                        File outputFile = new File(filesDir + File.separator + "SOUND", asset); // File.seperator might not be necessary.
+                        try (OutputStream os = new FileOutputStream(outputFile)) {
+                            byte[] buffer = new byte[1024];
+                            int len;
+                            while ((len = is.read(buffer)) != -1) {
+                                os.write(buffer, 0, len);
+                            }
+                        }
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
         }
     }
 
