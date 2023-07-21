@@ -52,7 +52,8 @@ public:
 	static TPinballTable* MainTable;
 	static bool FullTiltMode, FullTiltDemoMode;
 	static std::string DatFileName, BasePath;
-	static ImU32 TextBoxColor;
+	// ANDROID_PORT
+	//static ImU32 TextBoxColor;
 	static int quickFlag;
 	static TTextBox *InfoTextBox, *MissTextBox;
 

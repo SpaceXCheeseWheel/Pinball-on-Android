@@ -282,16 +282,23 @@ zmap_header_type* DatFile::GetZMap(int groupIndex)
 
 void DatFile::Finalize()
 {
+	// ANDROID_PORT TODO: Double check if this function is even needed
 	if (!pb::FullTiltMode)
 	{
 		int groupIndex = record_labeled("pbmsg_ft");
 		assertm(groupIndex < 0, "DatFile: pbmsg_ft is already in .dat");
 
 		// Load 3DPB font into dat to simplify pipeline
+
+		// ANDROID_PORT TODO: Remove this imgui dep.
+		/*
 		auto rcData = reinterpret_cast<MsgFont*>(ImFontAtlas::DecompressCompressedBase85Data(
 			EmbeddedData::PB_MSGFT_bin_compressed_data_base85));
 		AddMsgFont(rcData, "pbmsg_ft");
-		IM_FREE(rcData);
+
+		//IM_FREE(rcData);
+		 */
+		// ANDROID_PORT_END
 
 		// PINBALL2.MID is an alternative font provided in 3DPB data
 		// Scaled down because it is too large for top text box

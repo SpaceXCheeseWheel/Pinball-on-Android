@@ -129,9 +129,13 @@ private:
 	static bool ShowDialog;
 	static GameInput* ControlWaitingForInput;
 
+	// ANDROID_PORT
+	/*
 	static void MyUserData_ReadLine(ImGuiContext* ctx, ImGuiSettingsHandler* handler, void* entry, const char* line);
 	static void* MyUserData_ReadOpen(ImGuiContext* ctx, ImGuiSettingsHandler* handler, const char* name);
 	static void MyUserData_WriteAll(ImGuiContext* ctx, ImGuiSettingsHandler* handler, ImGuiTextBuffer* buf);
+	*/
+	// ANDROID_PORT_END
 	static void PostProcessOptions();
 };
 

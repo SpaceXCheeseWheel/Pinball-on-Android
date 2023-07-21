@@ -119,6 +119,8 @@ void high_score::show_and_set_high_score_dialog(high_score_entry score)
 
 void high_score::RenderHighScoreDialog()
 {
+	// ANDROID_PORT - Remove ImGui dep
+	/*
 	if (ShowDialog == true)
 	{
 		ShowDialog = false;
@@ -235,4 +237,6 @@ void high_score::RenderHighScoreDialog()
 			ShowDialog = true;
 		}
 	}
+	*/
+	// ANDROID_PORT_END
 }

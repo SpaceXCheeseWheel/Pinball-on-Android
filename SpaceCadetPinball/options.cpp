@@ -156,6 +156,8 @@ optionsStruct options::Options
 
 void options::InitPrimary()
 {
+	// ANDROID_PORT - Remove imgui options in favour of our own.
+	/*
 	auto imContext = ImGui::GetCurrentContext();
 	ImGuiSettingsHandler ini_handler;
 	ini_handler.TypeName = "Pinball";
@@ -171,6 +173,8 @@ void options::InitPrimary()
 		ImGui::LoadIniSettingsFromDisk(imContext->IO.IniFilename);
 		imContext->SettingsLoaded = true;
 	}
+	*/
+	// ANDROID_PORT_END
 
 	for (const auto opt : AllOptions)
 		opt->Load();
@@ -342,6 +346,8 @@ void options::ShowControlDialog()
 
 void options::RenderControlDialog()
 {
+	// ANDROID_PORT
+	/*
 	if (!ShowDialog)
 		return;
 
@@ -437,6 +443,8 @@ void options::RenderControlDialog()
 
 	if (!ShowDialog)
 		ControlWaitingForInput = nullptr;
+	*/
+    // ANDROID_PORT_END
 }
 
 std::vector<GameBindings> options::MapGameInput(GameInput key)
@@ -463,6 +471,8 @@ void options::ResetAllOptions()
 	PostProcessOptions();
 }
 
+// ANDROID_PORT
+/*
 void options::MyUserData_ReadLine(ImGuiContext* ctx, ImGuiSettingsHandler* handler, void* entry, const char* line)
 {
 	auto& keyValueStore = *static_cast<std::unordered_map<std::string, std::string>*>(entry);
@@ -475,13 +485,21 @@ void options::MyUserData_ReadLine(ImGuiContext* ctx, ImGuiSettingsHandler* handl
 		keyValueStore[key] = value;
 	}
 }
+*/
+// ANDROID_PORT_END
 
+// ANDROID_PORT
+/*
 void* options::MyUserData_ReadOpen(ImGuiContext* ctx, ImGuiSettingsHandler* handler, const char* name)
 {
 	// There is only one custom entry
 	return strcmp(name, "Settings") == 0 ? &settings : nullptr;
 }
+*/
+// ANDROID_PORT_END
 
+// ANDROID_PORT
+/*
 void options::MyUserData_WriteAll(ImGuiContext* ctx, ImGuiSettingsHandler* handler, ImGuiTextBuffer* buf)
 {
 	buf->appendf("[%s][%s]\n", handler->TypeName, "Settings");
@@ -491,10 +509,13 @@ void options::MyUserData_WriteAll(ImGuiContext* ctx, ImGuiSettingsHandler* handl
 	}
 	buf->append("\n");
 }
+*/
+// ANDROID_PORT_END
 
 void options::PostProcessOptions()
 {
-	winmain::ImIO->FontGlobalScale = Options.UIScale;
+    // ANDROID_PORT
+	// winmain::ImIO->FontGlobalScale = Options.UIScale;
 	Options.FramesPerSecond = Clamp(Options.FramesPerSecond.V, MinFps, MaxFps);
 	Options.UpdatesPerSecond = Clamp(Options.UpdatesPerSecond.V, MinUps, MaxUps);
 	Options.UpdatesPerSecond = std::max(Options.UpdatesPerSecond.V, Options.FramesPerSecond.V);
@@ -596,9 +617,11 @@ const std::string& options::GetSetting(const std::string& key, const std::string
 	if (setting == settings.end())
 	{
 		settings[key] = defaultValue;
-		if (ImGui::GetCurrentContext())
-			ImGui::MarkIniSettingsDirty();
-		return defaultValue;
+		// ANDROID_PORT
+        //if (ImGui::GetCurrentContext())
+		//	ImGui::MarkIniSettingsDirty();
+        // ANDROID_PORT_END
+        return defaultValue;
 	}
 	return setting->second;
 }
@@ -606,8 +629,10 @@ const std::string& options::GetSetting(const std::string& key, const std::string
 void options::SetSetting(const std::string& key, const std::string& value)
 {
 	settings[key] = value;
-	if (ImGui::GetCurrentContext())
-		ImGui::MarkIniSettingsDirty();
+    // ANDROID_PORT
+	//if (ImGui::GetCurrentContext())
+	//	ImGui::MarkIniSettingsDirty();
+    // ANDROID_PORT_END
 }
 
 OptionBase::OptionBase(LPCSTR name): Name(name)

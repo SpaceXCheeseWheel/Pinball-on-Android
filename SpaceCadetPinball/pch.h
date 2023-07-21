@@ -46,6 +46,8 @@ constexpr int MIX_INIT_MID_Proxy =
 	MIX_INIT_FLUIDSYNTH;
 #endif
 
+// ANDROID_PORT
+/*
 //https://github.com/ocornut/imgui 59b63defe5421642fb0cdcfd1fa850fc85a13791 + patches
 #include "imgui.h"
 #include "imgui_internal.h"
@@ -68,7 +70,8 @@ inline void ImGui_Render_Shutdown() { ImGuiSDL::Deinitialize(); }
 inline void ImGui_Render_NewFrame() { }
 inline void ImGui_Render_RenderDrawData(ImDrawData* draw_data) { ImGuiSDL::Render(draw_data); }
 #endif
-
+*/
+// ANDROID_PORT_END
 
 typedef char* LPSTR;
 typedef const char* LPCSTR;

@@ -145,6 +145,8 @@ void TTextBox::Display(const char* text, float time, bool lowPriority)
 
 void TTextBox::DrawImGui()
 {
+	// ANDROID_PORT
+	/*
 	// Do nothing when using a font (the text will be rendered to VScreen in TTextBox::Draw)
 	if (Font || !CurrentMessage)
 		return;
@@ -180,6 +182,8 @@ void TTextBox::DrawImGui()
 		ImGui::PopStyleColor();
 	}
 	ImGui::End();
+	*/
+    // ANDROID_PORT_END
 }
 
 void TTextBox::Draw()

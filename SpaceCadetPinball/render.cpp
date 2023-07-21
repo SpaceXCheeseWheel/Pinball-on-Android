@@ -360,6 +360,8 @@ void render::build_occlude_list()
 	delete spriteArr;
 }
 
+// ANDROID_PORT
+/*
 void render::SpriteViewer(bool* show)
 {
 	static const char* BitmapTypes[] =
@@ -451,6 +453,8 @@ void render::SpriteViewer(bool* show)
 	}
 	ImGui::End();
 }
+ */
+// ANDROID_PORT_END
 
 void render::PresentVScreen()
 {

@@ -1,7 +1,6 @@
 #include "SpaceCadetPinballJNI.h"
 #include "../../../../SpaceCadetPinball/winmain.h"
 #include "../../../../SpaceCadetPinball/Sound.h"
-// #include "../../../../SpaceCadetPinball/pinball.h"
 #include "../../../../SpaceCadetPinball/pb.h"
 #include "../../../../SpaceCadetPinball/control.h"
 #include <jni.h>

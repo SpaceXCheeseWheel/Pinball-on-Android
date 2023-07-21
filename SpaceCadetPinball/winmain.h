@@ -70,7 +70,8 @@ public:
 	static bool single_step;
 	static SDL_Window* MainWindow;
 	static SDL_Renderer* Renderer;
-	static ImGuiIO* ImIO;
+	// ANDROID_PORT
+	// static ImGuiIO* ImIO;
 	static bool LaunchBallEnabled;
 	static bool HighScoresEnabled;
 	static bool DemoActive;

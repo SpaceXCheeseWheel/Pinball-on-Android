@@ -15,7 +15,8 @@ constexpr const char* winmain::Version;
 
 SDL_Window* winmain::MainWindow = nullptr;
 SDL_Renderer* winmain::Renderer = nullptr;
-ImGuiIO* winmain::ImIO = nullptr;
+// ANDROID_PORT
+//ImGuiIO* winmain::ImIO = nullptr;
 
 int winmain::return_value = 0;
 bool winmain::bQuit = false;
@@ -59,7 +60,8 @@ int winmain::WinMain(LPCSTR lpCmdLine)
 	printf("Command line: %s\n", lpCmdLine);
 	printf("Compiled with: SDL %d.%d.%d;", SDL_MAJOR_VERSION, SDL_MINOR_VERSION, SDL_PATCHLEVEL);
 	printf(" SDL_mixer %d.%d.%d;", SDL_MIXER_MAJOR_VERSION, SDL_MIXER_MINOR_VERSION, SDL_MIXER_PATCHLEVEL);
-	printf(" ImGui %s %s\n", IMGUI_VERSION, ImGuiRender);
+	// ANDROID_PORT
+	//printf(" ImGui %s %s\n", IMGUI_VERSION, ImGuiRender);
 
 	// SDL init
 	SDL_SetMainReady();
@@ -111,7 +113,7 @@ int winmain::WinMain(LPCSTR lpCmdLine)
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
 
 	auto prefPath = SDL_GetPrefPath("", "SpaceCadetPinball");
-	auto basePath = SDL_GetBasePath();
+	auto basePath = SDL_GetBasePath(); // TODO: ANDROID_PORT Fixme. Refer to https://github.com/fexed/Pinball-on-Android/commit/097c071e3ada1fba711f9dbe61e7f64ecc9a764b#diff-14e5013aef089051ac4b459e57f1593c8c7a045ad58f38c708bbb809e6f68c25L15
 
 	// SDL mixer init
 	bool mixOpened = false, noAudio = strstr(lpCmdLine, "-noaudio") != nullptr;
@@ -137,12 +139,16 @@ int winmain::WinMain(LPCSTR lpCmdLine)
 		restart = false;
 
 		// ImGui init
+		// ANDROID_PORT
+		/*
 		IMGUI_CHECKVERSION();
 		ImGui::CreateContext();
 		ImGuiIO& io = ImGui::GetIO();
 		ImIO = &io;
 		auto iniPath = std::string(prefPath) + "imgui_pb.ini";
 		io.IniFilename = iniPath.c_str();
+		*/
+        // ANDROID_PORT_END
 
 		// First option initialization step: just load settings from .ini. Needs ImGui context.
 		options::InitPrimary();
@@ -154,6 +160,8 @@ int winmain::WinMain(LPCSTR lpCmdLine)
 
 		if (!Options.FontFileName.V.empty())
 		{
+            // ANDROID_PORT
+            /*
 			ImVector<ImWchar> ranges;
 			translations::GetGlyphRange(&ranges);
 			ImFontConfig fontConfig{};
@@ -161,6 +169,7 @@ int winmain::WinMain(LPCSTR lpCmdLine)
 			// ToDo: further tweak font options, maybe try imgui_freetype
 			fontConfig.OversampleV = 2;
 			fontConfig.OversampleH = 4;
+
 
 			// ToDo: improve font file test, checking if file exists is not enough
 			auto fontLoaded = false;
@@ -178,15 +187,21 @@ int winmain::WinMain(LPCSTR lpCmdLine)
 			if (!fontLoaded)
 				printf("Failed to load font: %s, using embedded font.\n", fileName);
 			io.Fonts->Build();
+            */
+            // ANDROID_PORT_END
 		}
-		ImGui_Render_Init(renderer);
+		// ANDROID_PORT
+        /*
+        ImGui_Render_Init(renderer);
 		ImGui::StyleColorsDark();
 
 		ImGui_ImplSDL2_InitForSDLRenderer(window, Renderer);
 		io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_NavEnableGamepad;
+        */
+        // ANDROID_PORT_END
 
 		// Data search order: WD, executable path, user pref path, platform specific paths.
-		std::vector<const char*> searchPaths
+        std::vector<const char*> searchPaths
 		{
 			{
 				"",
@@ -252,9 +267,13 @@ int winmain::WinMain(LPCSTR lpCmdLine)
 		Sound::Close();
 		pb::uninit();
 
+        // ANDROID_PORT
+        /*
 		ImGui_Render_Shutdown();
 		ImGui_ImplSDL2_Shutdown();
 		ImGui::DestroyContext();
+        */
+        // ANDROID_PORT_END
 	}
 	while (restart);
 
@@ -354,12 +373,14 @@ void winmain::MainLoop()
 
 			if (UpdateToFrameCounter >= UpdateToFrameRatio)
 			{
-				if (Options.HideCursor && CursorIdleCounter <= 0)
-					ImGui::SetMouseCursor(ImGuiMouseCursor_None);
-				ImGui_ImplSDL2_NewFrame();
-				ImGui_Render_NewFrame();
-				ImGui::NewFrame();
-				RenderUi();
+                // ANDROID_PORT
+				//if (Options.HideCursor && CursorIdleCounter <= 0)
+				//	ImGui::SetMouseCursor(ImGuiMouseCursor_None);
+				//ImGui_ImplSDL2_NewFrame();
+				//ImGui_Render_NewFrame();
+				//ImGui::NewFrame();
+				//RenderUi();
+                // ANDROID_PORT_END
 
 				SDL_RenderClear(Renderer);
 				// Alternative clear hack, clear might fail on some systems
@@ -367,8 +388,10 @@ void winmain::MainLoop()
 				SDL_RenderFillRect(Renderer, nullptr);
 				render::PresentVScreen();
 
-				ImGui::Render();
-				ImGui_Render_RenderDrawData(ImGui::GetDrawData());
+                // ANDROID_PORT
+				//ImGui::Render();
+				//ImGui_Render_RenderDrawData(ImGui::GetDrawData());
+                // ANDROID_PORT_END
 
 				SDL_RenderPresent(Renderer);
 				frameCounter++;
@@ -434,8 +457,11 @@ void winmain::MainLoop()
 	}
 }
 
+// ANDROID_PORT
+/*
 void winmain::RenderUi()
 {
+
 	// A minimal window with a button to prevent menu lockout.
 	if (!Options.ShowMenu)
 	{
@@ -827,9 +853,12 @@ void winmain::RenderUi()
 	// Print game texts on the sidebar
 	gdrv::grtext_draw_ttext_in_box();
 }
+*/
+// ANDROID_PORT_END
 
 int winmain::event_handler(const SDL_Event* event)
 {
+    // ANDROID_PORT TODO: Replace event handler with our own;  https://github.com/fexed/Pinball-on-Android/commit/097c071e3ada1fba711f9dbe61e7f64ecc9a764b#diff-14e5013aef089051ac4b459e57f1593c8c7a045ad58f38c708bbb809e6f68c25L574
 	auto inputDown = false;
 	switch (event->type)
 	{
@@ -840,8 +869,10 @@ int winmain::event_handler(const SDL_Event* event)
 		break;
 	default: break;
 	}
-	if (!options::WaitingForInput() || !inputDown)
-		ImGui_ImplSDL2_ProcessEvent(event);
+	// ANDROID_PORT
+    //if (!options::WaitingForInput() || !inputDown)
+	//	ImGui_ImplSDL2_ProcessEvent(event);
+    // ANDROID_PORT_END
 
 	bool mouseEvent;
 	switch (event->type)
@@ -858,6 +889,8 @@ int winmain::event_handler(const SDL_Event* event)
 		break;
 	}
 
+    // ANDROID_PORT
+    /*
 	if (ImIO->WantCaptureMouse && !options::WaitingForInput())
 	{
 		if (mouse_down)
@@ -880,6 +913,8 @@ int winmain::event_handler(const SDL_Event* event)
 		default: ;
 		}
 	}
+    */
+    // ANDROID_PORT_END
 
 	switch (event->type)
 	{
@@ -1079,6 +1114,8 @@ void winmain::memalloc_failure()
 
 void winmain::a_dialog()
 {
+    // ANDROID_PORT
+    /*
 	if (ShowAboutDialog == true)
 	{
 		ShowAboutDialog = false;
@@ -1254,6 +1291,8 @@ void winmain::a_dialog()
 		ImGui::EndPopup();
 	}
 	ImGui::PopStyleVar();
+     */
+    // ANDROID_PORT_END
 }
 
 void winmain::end_pause()
@@ -1337,6 +1376,8 @@ void winmain::HandleGameBinding(GameBindings binding, bool shortcut)
 
 void winmain::RenderFrameTimeDialog()
 {
+    // ANDROID_PORT
+    /*
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2{300, 70});
 	if (ImGui::Begin("Frame Times", &DispGRhistory, ImGuiWindowFlags_NoScrollbar))
 	{
@@ -1372,6 +1413,8 @@ void winmain::RenderFrameTimeDialog()
 	}
 	ImGui::End();
 	ImGui::PopStyleVar();
+    */
+    // ANDROID_PORT_END
 }
 
 void winmain::HybridSleep(DurationMs sleepTarget)
@@ -1401,9 +1444,13 @@ void winmain::HybridSleep(DurationMs sleepTarget)
 
 void winmain::ImGuiMenuItemWShortcut(GameBindings binding, bool selected)
 {
+    // ANDROID_PORT
+    /*
 	const auto& keyDef = Options.Key[~binding];
 	if (ImGui::MenuItem(pb::get_rc_string(keyDef.Description), keyDef.GetShortcutDescription().c_str(), selected))
 	{
 		HandleGameBinding(binding, false);
 	}
+     */
+    // ANDROID_PORT_END
 }

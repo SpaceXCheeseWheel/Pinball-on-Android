@@ -37,7 +37,8 @@ float pb::BallMaxSpeed, pb::BallHalfRadius, pb::BallToBallCollisionDistance;
 float pb::IdleTimerMs = 0;
 bool pb::FullTiltMode = false, pb::FullTiltDemoMode = false, pb::cheat_mode = false, pb::demo_mode = false, pb::CreditsActive = false;
 std::string pb::DatFileName, pb::BasePath;
-ImU32 pb::TextBoxColor;
+// ANDROID_PORT
+// ImU32 pb::TextBoxColor;
 int pb::quickFlag = 0;
 TTextBox *pb::InfoTextBox, *pb::MissTextBox;
 
@@ -110,11 +111,14 @@ int pb::init()
 	BallToBallCollisionDistance = (ball->Radius + BallHalfRadius) * 2.0f;
 
 	int red = 255, green = 255, blue = 255;
+	// ANDROID_PORT
+	/*
 	auto fontColor = get_rc_string(Msg::TextBoxColor);
 	if (fontColor)
 		sscanf(fontColor, "%d %d %d", &red, &green, &blue);
 	TextBoxColor = IM_COL32(red, green, blue, 255);
-
+	*/
+    // ANDROID_PORT_END
 	return 0;
 }
 
