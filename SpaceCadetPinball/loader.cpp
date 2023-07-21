@@ -1,8 +1,8 @@
 ﻿#include "pch.h"
 #include "loader.h"
 #include "GroupData.h"
+#include "TPinballComponent.h"
 #include "pb.h"
-#include "pinball.h"
 #include "Sound.h"
 #include "zdrv.h"
 
@@ -62,7 +62,7 @@ int loader::error(int errorCode, int captionCode)
 
 	if (!errorText)
 		errorText = loader_errors[index].Message;
-	SpaceCadetPinballJNI::show_error_dialog(errorCaption, errorText);
+	pb::ShowMessageBox(SDL_MESSAGEBOX_ERROR, errorCaption, errorText);
 	return -1;
 }
 
@@ -75,8 +75,7 @@ void loader::default_vsi(visualStruct* visual)
 	visual->Elasticity = 0.60000002f;
 	visual->FloatArrCount = 0;
 	visual->SoftHitSoundId = 0;
-	visual->Bitmap = nullptr;
-	visual->ZMap = nullptr;
+	visual->Bitmap = { nullptr, nullptr };
 	visual->SoundIndex3 = 0;
 	visual->SoundIndex4 = 0;
 }
@@ -137,39 +136,43 @@ int loader::get_sound_id(int groupIndex)
 
 		int soundGroupId = sound_list[soundIndex].GroupIndex;
 		sound_list[soundIndex].Duration = 0.0;
-		if (soundGroupId > 0 && !pinball::quickFlag)
+		if (soundGroupId > 0 && !pb::quickFlag)
 		{
 			auto value = reinterpret_cast<int16_t*>(loader_table->field(soundGroupId,
 			                                                            FieldTypes::ShortValue));
 			if (value && *value == 202)
 			{
+				// File name is in lower case, while game data is usually in upper case.
 				std::string fileName = loader_table->field(soundGroupId, FieldTypes::String);
-
-				// File name is in lower case, while game data is in upper case.				
-				std::transform(fileName.begin(), fileName.end(), fileName.begin(),
-				               [](unsigned char c) { return std::toupper(c); });
 				if (pb::FullTiltMode)
 				{
 					// FT sounds are in SOUND subfolder
 					fileName.insert(0, 1, PathSeparator);
-					fileName.insert(0, "SOUND");
+					fileName.insert(0, "sound");
 				}
 
+				std::string filePath;
 				float duration = -1;
-				auto filePath = pinball::make_path_name(fileName);
-				auto file = fopen(filePath.c_str(), "rb");
-				if (file)
+				for (int i = 0; i < 2; i++)
 				{
-					fread(&wavHeader, 1, sizeof wavHeader, file);
-					fclose(file);
-					auto sampleCount = wavHeader.data_size / (wavHeader.channels * (wavHeader.bits_per_sample / 8.0));
-					duration = static_cast<float>(sampleCount / wavHeader.sample_rate);
+					if (i == 1)
+						std::transform(fileName.begin(), fileName.end(), fileName.begin(),
+						               [](unsigned char c) { return std::toupper(c); });
+
+					filePath = pb::make_path_name(fileName);
+					auto file = fopenu(filePath.c_str(), "rb");
+					if (file)
+					{
+						fread(&wavHeader, 1, sizeof wavHeader, file);
+						fclose(file);
+						auto sampleCount = wavHeader.data_size / (wavHeader.channels * (wavHeader.bits_per_sample /
+							8.0));
+						duration = static_cast<float>(sampleCount / wavHeader.sample_rate);
+						break;
+					}
 				}
 
 				sound_list[soundIndex].Duration = duration;
-
-				auto sampleCount = wavHeader.data_size / (wavHeader.channels * (wavHeader.bits_per_sample / 8.0));
-				sound_list[soundIndex].Duration = static_cast<float>(sampleCount / wavHeader.sample_rate);
 				sound_list[soundIndex].WavePtr = Sound::LoadWaveFile(filePath);
 			}
 		}
@@ -329,12 +332,11 @@ int loader::material(int groupIndex, visualStruct* visual)
 	return 0;
 }
 
-
-float loader::play_sound(int soundIndex)
+float loader::play_sound(int soundIndex, TPinballComponent *soundSource, const char *info)
 {
 	if (soundIndex <= 0)
 		return 0.0;
-	Sound::PlaySound(sound_list[soundIndex].WavePtr, pb::time_ticks);
+	Sound::PlaySound(sound_list[soundIndex].WavePtr, pb::time_ticks, soundSource, info);
 	return sound_list[soundIndex].Duration;
 }
 
@@ -393,7 +395,7 @@ int loader::kicker(int groupIndex, visualKickerStruct* kicker)
 			kicker->ThrowBallMult = *floatArr;
 			break;
 		case 404:
-			kicker->ThrowBallAcceleration = *reinterpret_cast<vector3*>(floatArr);
+			kicker->ThrowBallDirection = *reinterpret_cast<vector3*>(floatArr);
 			floatArr += 3;
 			index += 4;
 			break;
@@ -425,8 +427,9 @@ int loader::query_visual(int groupIndex, int groupIndexOffset, visualStruct* vis
 	if (stateId < 0)
 		return error(16, 18);
 
-	visual->Bitmap = loader_table->GetBitmap(stateId);
-	visual->ZMap = loader_table->GetZMap(stateId);
+	auto bmp = loader_table->GetBitmap(stateId);
+	auto zMap = loader_table->GetZMap(stateId);
+	visual->Bitmap = { bmp, zMap };
 
 	auto shortArr = reinterpret_cast<int16_t*>(loader_table->field(stateId, FieldTypes::ShortArray));
 	if (shortArr)

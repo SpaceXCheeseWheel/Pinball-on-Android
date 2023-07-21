@@ -8,7 +8,7 @@
 TEdgeSegment::TEdgeSegment(TCollisionComponent* collComp, char* activeFlag, unsigned collisionGroup)
 {
 	CollisionComponent = collComp;
-	ActiveFlag = activeFlag;
+	ActiveFlagPtr = activeFlag;
 	CollisionGroup = collisionGroup;
 	ProcessedFlag = 0;
 }
@@ -33,15 +33,10 @@ TEdgeSegment* TEdgeSegment::install_wall(float* floatArr, TCollisionComponent* c
 			center.Y = floatArr[2];
 			auto radius = offset + floatArr[3];
 			auto circle = new TCircle(collComp, activeFlagPtr, collisionGroup, &center, radius);
-			edge = circle;
-
-			if (circle)
-			{
-				circle->WallValue = reinterpret_cast<void*>(wallValue);
-				circle->place_in_grid();
-			}
-
+			circle->WallValue = reinterpret_cast<void*>(wallValue);
+			circle->place_in_grid(&collComp->AABB);
 			collComp->EdgeList.push_back(circle);
+			edge = circle;
 			break;
 		}
 	case wall_type::Line:
@@ -51,15 +46,11 @@ TEdgeSegment* TEdgeSegment::install_wall(float* floatArr, TCollisionComponent* c
 			end.X = floatArr[3];
 			end.Y = floatArr[4];
 			auto line = new TLine(collComp, activeFlagPtr, collisionGroup, start, end);
+			line->WallValue = reinterpret_cast<void*>(wallValue);
+			line->Offset(offset);
+			line->place_in_grid(&collComp->AABB);
+			collComp->EdgeList.push_back(line);
 			edge = line;
-
-			if (line)
-			{
-				line->WallValue = reinterpret_cast<void*>(wallValue);
-				line->Offset(offset);
-				line->place_in_grid();
-				collComp->EdgeList.push_back(line);
-			}
 			break;
 		}
 	default:
@@ -94,18 +85,14 @@ TEdgeSegment* TEdgeSegment::install_wall(float* floatArr, TCollisionComponent* c
 					vec2.X = centerX2 - centerX1;
 					vec2.Y = centerY2 - center.Y;
 					maths::cross(vec1, vec2, dstVec);
-					if (dstVec.Z > 0.0f && offset > 0.0f ||
-						dstVec.Z < 0.0f && offset < 0.0f)
+					if ((dstVec.Z > 0.0f && offset > 0.0f) ||
+						(dstVec.Z < 0.0f && offset < 0.0f))
 					{
 						float radius = offset * 1.001f;
 						auto circle = new TCircle(collComp, activeFlagPtr, collisionGroup, &center, radius);
-
-						if (circle)
-						{
-							circle->WallValue = reinterpret_cast<void*>(wallValue);
-							circle->place_in_grid();
-							collComp->EdgeList.push_back(circle);
-						}
+						circle->WallValue = reinterpret_cast<void*>(wallValue);
+						circle->place_in_grid(&collComp->AABB);
+						collComp->EdgeList.push_back(circle);
 					}
 				}
 
@@ -114,16 +101,12 @@ TEdgeSegment* TEdgeSegment::install_wall(float* floatArr, TCollisionComponent* c
 				end.X = floatArrPtr[2];
 				end.Y = floatArrPtr[3];
 				auto line = new TLine(collComp, activeFlagPtr, collisionGroup, start, end);
+				line->WallValue = reinterpret_cast<void*>(wallValue);
+				line->Offset(offset);
+				line->place_in_grid(&collComp->AABB);
+				collComp->EdgeList.push_back(line);
+
 				edge = line;
-
-				if (line)
-				{
-					line->WallValue = reinterpret_cast<void*>(wallValue);
-					line->Offset(offset);
-					line->place_in_grid();
-					collComp->EdgeList.push_back(line);
-				}
-
 				prevCenter = center;
 			}
 		}

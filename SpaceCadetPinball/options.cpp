@@ -3,106 +3,182 @@
 
 #include "fullscrn.h"
 #include "midi.h"
+#include "pb.h"
 #include "render.h"
 #include "Sound.h"
 #include "winmain.h"
+#include "translations.h"
 
 constexpr int options::MaxUps, options::MaxFps, options::MinUps, options::MinFps, options::DefUps, options::DefFps;
 constexpr int options::MaxSoundChannels, options::MinSoundChannels, options::DefSoundChannels;
 constexpr int options::MaxVolume, options::MinVolume, options::DefVolume;
 
-optionsStruct options::Options{};
-std::map<std::string, std::string> options::settings{};
-ControlsStruct options::RebindControls{};
+std::unordered_map<std::string, std::string> options::settings{};
 bool options::ShowDialog = false;
 GameInput* options::ControlWaitingForInput = nullptr;
-const ControlRef options::Controls[6]
+std::vector<OptionBase*> options::AllOptions{};
+
+optionsStruct options::Options
 {
-	{"Left Flipper", RebindControls.LeftFlipper},
-	{"Right Flipper", RebindControls.RightFlipper},
-	{"Left Table Bump", RebindControls.LeftTableBump},
-	{"Right Table Bump", RebindControls.RightTableBump},
-	{"Bottom Table Bump", RebindControls.BottomTableBump},
-	{"Plunger", RebindControls.Plunger},
-};
-
-
-void options::init()
-{
-//	auto imContext = ImGui::GetCurrentContext();
-//	ImGuiSettingsHandler ini_handler;
-//	ini_handler.TypeName = "Pinball";
-//	ini_handler.TypeHash = ImHashStr(ini_handler.TypeName);
-//	ini_handler.ReadOpenFn = MyUserData_ReadOpen;
-//	ini_handler.ReadLineFn = MyUserData_ReadLine;
-//	ini_handler.WriteAllFn = MyUserData_WriteAll;
-//	imContext->SettingsHandlers.push_back(ini_handler);
-//
-//	// Settings are loaded from disk on the first frame
-//	if (!imContext->SettingsLoaded)
-//	{
-//		ImGui::NewFrame();
-//		ImGui::EndFrame();
-//	}
-
-	Options.Key = Options.KeyDft =
 	{
 		{
+			"Left Flipper key",
+			Msg::KEYMAPPER_FlipperL,
 			{InputTypes::Keyboard, SDLK_z},
 			{InputTypes::Mouse, SDL_BUTTON_LEFT},
-			{InputTypes::GameController, SDL_CONTROLLER_BUTTON_LEFTSHOULDER},
+			{InputTypes::GameController, SDL_CONTROLLER_BUTTON_LEFTSHOULDER}
 		},
 		{
+			"Right Flipper key",
+			Msg::KEYMAPPER_FlipperR,
 			{InputTypes::Keyboard, SDLK_SLASH},
-			{InputTypes::Mouse, SDL_BUTTON_RIGHT},
-			{InputTypes::GameController, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER},
+			{InputTypes::Mouse,SDL_BUTTON_RIGHT},
+			{InputTypes::GameController, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER}
 		},
 		{
+			"Plunger key",
+			Msg::KEYMAPPER_Plunger,
 			{InputTypes::Keyboard, SDLK_SPACE},
-			{InputTypes::Mouse, SDL_BUTTON_MIDDLE},
-			{InputTypes::GameController, SDL_CONTROLLER_BUTTON_A},
+			{InputTypes::Mouse,SDL_BUTTON_MIDDLE},
+			{InputTypes::GameController, SDL_CONTROLLER_BUTTON_A}
 		},
 		{
+			"Left Table Bump key",
+			Msg::KEYMAPPER_BumpLeft,
 			{InputTypes::Keyboard, SDLK_x},
-			{InputTypes::Mouse, SDL_BUTTON_X1},
-			{InputTypes::GameController, SDL_CONTROLLER_BUTTON_DPAD_LEFT},
+			{InputTypes::Mouse,SDL_BUTTON_X1},
+			{InputTypes::GameController, SDL_CONTROLLER_BUTTON_DPAD_LEFT}
 		},
 		{
+			"Right Table Bump key",
+			Msg::KEYMAPPER_BumpRight,
 			{InputTypes::Keyboard, SDLK_PERIOD},
-			{InputTypes::Mouse, SDL_BUTTON_X2},
-			{InputTypes::GameController, SDL_CONTROLLER_BUTTON_DPAD_RIGHT},
+			{InputTypes::Mouse,SDL_BUTTON_X2},
+			{InputTypes::GameController, SDL_CONTROLLER_BUTTON_DPAD_RIGHT}
 		},
 		{
+			"Bottom Table Bump key",
+			Msg::KEYMAPPER_BumpBottom,
 			{InputTypes::Keyboard, SDLK_UP},
-			{InputTypes::Mouse, SDL_BUTTON_X2 + 1},
-			{InputTypes::GameController, SDL_CONTROLLER_BUTTON_DPAD_UP},
+			{InputTypes::Mouse,SDL_BUTTON_X2 + 1},
+			{InputTypes::GameController, SDL_CONTROLLER_BUTTON_DPAD_UP}
 		},
-	};
-	GetInput("Left Flipper key", Options.Key.LeftFlipper);
-	GetInput("Right Flipper key", Options.Key.RightFlipper);
-	GetInput("Plunger key", Options.Key.Plunger);
-	GetInput("Left Table Bump key", Options.Key.LeftTableBump);
-	GetInput("Right Table Bump key", Options.Key.RightTableBump);
-	GetInput("Bottom Table Bump key", Options.Key.BottomTableBump);
+		{
+			"New Game",
+			Msg::Menu1_New_Game,
+			{InputTypes::Keyboard, SDLK_F2},
+			{},
+			{}
+		},
+		{
+			"Toggle Pause",
+			Msg::Menu1_Pause_Resume_Game,
+			{InputTypes::Keyboard, SDLK_F3},
+			{},
+			{InputTypes::GameController, SDL_CONTROLLER_BUTTON_START}
+		},
+		{
+			"Toggle FullScreen",
+			Msg::Menu1_Full_Screen,
+			{InputTypes::Keyboard, SDLK_F4},
+			{},
+			{}
+		},
+		{
+			"Toggle Sounds",
+			Msg::Menu1_Sounds,
+			{InputTypes::Keyboard, SDLK_F5},
+			{},
+			{}
+		},
+		{
+			"Toggle Music",
+			Msg::Menu1_Music,
+			{InputTypes::Keyboard, SDLK_F6},
+			{},
+			{}
+		},
+		{
+			"Show Control Dialog",
+			Msg::Menu1_Player_Controls,
+			{InputTypes::Keyboard, SDLK_F8},
+			{},
+			{}
+		},
+		{
+			"Toggle Menu Display",
+			Msg::Menu1_ToggleShowMenu,
+			{InputTypes::Keyboard, SDLK_F9},
+			{},
+			{}
+		},
+		{
+			"Exit",
+			Msg::Menu1_Exit,
+			{InputTypes::Keyboard, SDLK_ESCAPE},
+			{},
+			{InputTypes::GameController, SDL_CONTROLLER_BUTTON_BACK}
+		},
+	},
+	{"Sounds", true},
+	{"Music", false},
+	{"FullScreen", false},
+	{"Players", 1},
+	{"Screen Resolution", -1},
+	{"UI Scale", 1.0f},
+	{"Uniform scaling", true},
+	{"Linear Filtering", true},
+	{"Frames Per Second", DefFps},
+	{"Updates Per Second", DefUps},
+	{"ShowMenu", true},
+	{"Uncapped Updates Per Second", false},
+	{"Sound Channels", DefSoundChannels},
+	{"HybridSleep", false},
+	{"Prefer 3DPB Game Data", false},
+	{"Integer Scaling", false},
+	{"Sound Volume", DefVolume},
+	{"Music Volume", DefVolume},
+	{"Stereo Sound Effects", false},
+	{"Debug Overlay", false},
+	{"Debug Overlay Grid", true},
+	{"Debug Overlay All Edges", true},
+	{"Debug Overlay Ball Position", true},
+	{"Debug Overlay Ball Edges", true},
+	{"Debug Overlay Collision Mask", true},
+	{"Debug Overlay Sprites", true},
+	{"Debug Overlay Sounds", true},
+	{"Debug Overlay Ball Depth Grid", true},
+	{"Debug Overlay AABB", true},
+	{"FontFileName", ""},
+	{"Language", translations::GetCurrentLanguage()->ShortName},
+	{"Hide Cursor", false},
+};
 
-	Options.Sounds = get_int("Sounds", true);
-	Options.Music = get_int("Music", false);
-	Options.FullScreen = get_int("FullScreen", false);
-	Options.Players = get_int("Players", 1);
-	Options.UniformScaling = get_int("Uniform scaling", true);
-	Options.Resolution = get_int("Screen Resolution", -1);
-	Options.LinearFiltering = get_int("Linear Filtering", true);
-	Options.FramesPerSecond = Clamp(get_int("Frames Per Second", DefFps), MinFps, MaxFps);
-	Options.UpdatesPerSecond = Clamp(get_int("Updates Per Second", DefUps), MinUps, MaxUps);
-	Options.UpdatesPerSecond = std::max(Options.UpdatesPerSecond, Options.FramesPerSecond);
-	Options.ShowMenu = get_int("ShowMenu", true);
-	Options.UncappedUpdatesPerSecond = get_int("Uncapped Updates Per Second", false);
-	Options.SoundChannels = Clamp(get_int("Sound Channels", DefSoundChannels), MinSoundChannels, MaxSoundChannels);
-	Options.SoundVolume = Clamp(get_int("Sound Volume", DefVolume), MinVolume, MaxVolume);
-	Options.MusicVolume = Clamp(get_int("Music Volume", DefVolume), MinVolume, MaxVolume);
+void options::InitPrimary()
+{
+	auto imContext = ImGui::GetCurrentContext();
+	ImGuiSettingsHandler ini_handler;
+	ini_handler.TypeName = "Pinball";
+	ini_handler.TypeHash = ImHashStr(ini_handler.TypeName);
+	ini_handler.ReadOpenFn = MyUserData_ReadOpen;
+	ini_handler.ReadLineFn = MyUserData_ReadLine;
+	ini_handler.WriteAllFn = MyUserData_WriteAll;
+	imContext->SettingsHandlers.push_back(ini_handler);
 
-	winmain::UpdateFrameRate();
+	// Settings are loaded from disk on the first frame
+	if (!imContext->SettingsLoaded)
+	{
+		ImGui::LoadIniSettingsFromDisk(imContext->IO.IniFilename);
+		imContext->SettingsLoaded = true;
+	}
 
+	for (const auto opt : AllOptions)
+		opt->Load();
+	PostProcessOptions();
+}
+
+void options::InitSecondary()
+{
 	auto maxRes = fullscrn::GetMaxResolution();
 	if (Options.Resolution >= 0 && Options.Resolution > maxRes)
 		Options.Resolution = maxRes;
@@ -111,27 +187,11 @@ void options::init()
 
 void options::uninit()
 {
-	SetInput("Left Flipper key", Options.Key.LeftFlipper);
-	SetInput("Right Flipper key", Options.Key.RightFlipper);
-	SetInput("Plunger key", Options.Key.Plunger);
-	SetInput("Left Table Bump key", Options.Key.LeftTableBump);
-	SetInput("Right Table Bump key", Options.Key.RightTableBump);
-	SetInput("Bottom Table Bump key", Options.Key.BottomTableBump);
-
-	set_int("Sounds", Options.Sounds);
-	set_int("Music", Options.Music);
-	set_int("FullScreen", Options.FullScreen);
-	set_int("Players", Options.Players);
-	set_int("Screen Resolution", Options.Resolution);
-	set_int("Uniform scaling", Options.UniformScaling);
-	set_int("Linear Filtering", Options.LinearFiltering);
-	set_int("Frames Per Second", Options.FramesPerSecond);
-	set_int("Updates Per Second", Options.UpdatesPerSecond);
-	set_int("ShowMenu", Options.ShowMenu);
-	set_int("Uncapped Updates Per Second", Options.UncappedUpdatesPerSecond);
-	set_int("Sound Channels", Options.SoundChannels);
-	set_int("Sound Volume", Options.SoundVolume);
-	set_int("Music Volume", Options.MusicVolume);
+	Options.Language.V = translations::GetCurrentLanguage()->ShortName;
+	for (const auto opt : AllOptions)
+	{
+		opt->Save();
+	}
 }
 
 
@@ -146,16 +206,6 @@ void options::set_int(LPCSTR lpValueName, int data)
 	SetSetting(lpValueName, std::to_string(data));
 }
 
-std::string options::get_string(LPCSTR lpValueName, LPCSTR defaultValue)
-{
-	return GetSetting(lpValueName, defaultValue);
-}
-
-void options::set_string(LPCSTR lpValueName, LPCSTR value)
-{
-	SetSetting(lpValueName, value);
-}
-
 float options::get_float(LPCSTR lpValueName, float defaultValue)
 {
 	auto value = GetSetting(lpValueName, std::to_string(defaultValue));
@@ -167,7 +217,7 @@ void options::set_float(LPCSTR lpValueName, float data)
 	SetSetting(lpValueName, std::to_string(data));
 }
 
-void options::GetInput(const std::string& rowName, GameInput (&defaultValues)[3])
+void options::GetInput(const std::string& rowName, GameInput (&values)[3])
 {
 	for (auto i = 0u; i <= 2; i++)
 	{
@@ -175,7 +225,7 @@ void options::GetInput(const std::string& rowName, GameInput (&defaultValues)[3]
 		auto inputType = static_cast<InputTypes>(get_int((name + " type").c_str(), -1));
 		auto input = get_int((name + " input").c_str(), -1);
 		if (inputType <= InputTypes::GameController && input != -1)
-			defaultValues[i] = {inputType, input};
+			values[i] = {inputType, input};
 	}
 }
 
@@ -198,15 +248,18 @@ void options::toggle(Menu1 uIDCheckItem)
 		Options.Sounds ^= true;
 		Sound::Enable(Options.Sounds);
 		return;
+	case Menu1::SoundStereo:
+		Options.SoundStereo ^= true;
+		return;
 	case Menu1::Music:
 		Options.Music ^= true;
 		if (!Options.Music)
 			midi::music_stop();
 		else
-			midi::play_pb_theme();
+			midi::music_play();
 		return;
 	case Menu1::Show_Menu:
-		Options.ShowMenu = Options.ShowMenu == 0;
+		Options.ShowMenu ^= true;
 		fullscrn::window_size_changed();
 		return;
 	case Menu1::Full_Screen:
@@ -251,6 +304,14 @@ void options::toggle(Menu1 uIDCheckItem)
 		Options.LinearFiltering ^= true;
 		render::recreate_screen_texture();
 		break;
+	case Menu1::Prefer3DPBGameData:
+		Options.Prefer3DPBGameData ^= true;
+		winmain::Restart();
+		break;
+	case Menu1::WindowIntegerScale:
+		Options.IntegerScaling ^= true;
+		fullscrn::window_size_changed();
+		break;
 	default:
 		break;
 	}
@@ -260,14 +321,6 @@ void options::InputDown(GameInput input)
 {
 	if (ControlWaitingForInput)
 	{
-		// Skip function keys, just in case.
-		if (input.Type == InputTypes::Keyboard && input.Value >= SDLK_F1 && input.Value <= SDLK_F12)
-			return;
-
-		// Start is reserved for pause
-		if (input.Type == InputTypes::GameController && input.Value == SDL_CONTROLLER_BUTTON_START)
-			return;
-
 		*ControlWaitingForInput = input;
 		ControlWaitingForInput = nullptr;
 	}
@@ -278,171 +331,274 @@ void options::ShowControlDialog()
 	if (!ShowDialog)
 	{
 		ControlWaitingForInput = nullptr;
-		RebindControls = Options.Key;
 		ShowDialog = true;
+		// Save previous controls in KVP storage.
+		for (const auto& control : Options.Key)
+		{
+			control.Save();
+		}
 	}
 }
 
 void options::RenderControlDialog()
 {
-//	static const char* mouseButtons[]
-//	{
-//		nullptr,
-//		"Mouse Left",
-//		"Mouse Middle",
-//		"Mouse Right",
-//		"Mouse X1",
-//		"Mouse X2",
-//	};
-//
-//	if (!ShowDialog)
-//		return;
-//
-//	ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2{550, 450});
-//	if (ImGui::Begin("3D Pinball: Player Controls", &ShowDialog))
-//	{
-//		ImGui::TextUnformatted("Instructions");
-//		ImGui::Separator();
-//
-//		ImGui::TextWrapped(
-//			"To change game controls, click the control button, press the new key, and then choose OK.");
-//		ImGui::TextWrapped(
-//			"To restore 3D Pinball to its original settings, choose Default, and then choose OK.");
-//		ImGui::Spacing();
-//
-//		ImGui::TextUnformatted("Control Options");
-//
-//		ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2{5, 10});
-//		if (ImGui::BeginTable("Controls", 4, ImGuiTableFlags_NoSavedSettings | ImGuiTableFlags_Borders))
-//		{
-//			ImGui::TableSetupColumn("Control");
-//			ImGui::TableSetupColumn("Binding 1");
-//			ImGui::TableSetupColumn("Binding 2");
-//			ImGui::TableSetupColumn("Binding 3");
-//			ImGui::TableHeadersRow();
-//
-//			int index = 0;
-//			for (auto& row : Controls)
-//			{
-//				ImGui::TableNextColumn();
-//				ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{0.5, 0, 0, 1});
-//				if (ImGui::Button(row.Name))
-//				{
-//					for (auto i = 0u; i <= 2; i++)
-//						row.Option[i] = {};
-//				}
-//				ImGui::PopStyleColor(1);
-//
-//				for (auto i = 0u; i <= 2; i++)
-//				{
-//					auto& ctrl = row.Option[i];
-//					ImGui::TableNextColumn();
-//					if (ControlWaitingForInput == &ctrl)
-//					{
-//						ImGui::Button("Press the key", ImVec2(-1, 0));
-//					}
-//					else
-//					{
-//						std::string tmp;
-//						const char* keyName;
-//						switch (ctrl.Type)
-//						{
-//						case InputTypes::Keyboard:
-//							keyName = SDL_GetKeyName(ctrl.Value);
-//							break;
-//						case InputTypes::Mouse:
-//							if (ctrl.Value >= SDL_BUTTON_LEFT && ctrl.Value <= SDL_BUTTON_X2)
-//								keyName = mouseButtons[ctrl.Value];
-//							else
-//								keyName = (tmp += "Mouse " + std::to_string(ctrl.Value)).c_str();
-//							break;
-//						case InputTypes::GameController:
-//							keyName = SDL_GameControllerGetStringForButton(
-//								static_cast<SDL_GameControllerButton>(ctrl.Value));
-//							break;
-//						case InputTypes::None:
-//						default:
-//							keyName = "Unused";
-//						}
-//						if (!keyName || !keyName[0])
-//							keyName = "Unknown key";
-//						if (ImGui::Button((std::string{keyName} + "##" + std::to_string(index++)).c_str(),
-//						                  ImVec2(-1, 0)))
-//						{
-//							ControlWaitingForInput = &ctrl;
-//						}
-//					}
-//				}
-//			}
-//			ImGui::EndTable();
-//		}
-//		ImGui::PopStyleVar();
-//		ImGui::Spacing();
-//
-//		if (ImGui::Button("OK"))
-//		{
-//			Options.Key = RebindControls;
-//			ShowDialog = false;
-//		}
-//
-//		ImGui::SameLine();
-//		if (ImGui::Button("Cancel"))
-//		{
-//			ShowDialog = false;
-//		}
-//
-//		ImGui::SameLine();
-//		if (ImGui::Button("Default"))
-//		{
-//			RebindControls = Options.KeyDft;
-//			ControlWaitingForInput = nullptr;
-//		}
-//	}
-//	ImGui::End();
-//	ImGui::PopStyleVar();
-//
-//	if (!ShowDialog)
-//		ControlWaitingForInput = nullptr;
+	if (!ShowDialog)
+		return;
+
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2{550, 550});
+	if (ImGui::Begin(pb::get_rc_string(Msg::KEYMAPPER_Caption), &ShowDialog))
+	{
+		if (ImGui::TreeNode(pb::get_rc_string(Msg::KEYMAPPER_Groupbox2)))
+		{
+			ImGui::TextWrapped("%s", pb::get_rc_string(Msg::KEYMAPPER_Help1));
+			ImGui::TextWrapped("%s", pb::get_rc_string(Msg::KEYMAPPER_Help2));
+			ImGui::TreePop();
+		}
+
+		ImGui::Spacing();
+		ImGui::TextUnformatted(pb::get_rc_string(Msg::KEYMAPPER_Groupbox1));
+
+		ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2{5, 10});
+		if (ImGui::BeginTable("Controls", 4,
+		                      ImGuiTableFlags_NoSavedSettings | ImGuiTableFlags_Borders |
+		                      ImGuiTableFlags_SizingStretchSame))
+		{
+			ImGui::TableSetupColumn("Control");
+			ImGui::TableSetupColumn("Binding 1");
+			ImGui::TableSetupColumn("Binding 2");
+			ImGui::TableSetupColumn("Binding 3");
+			ImGui::TableHeadersRow();
+
+			int rowHash = 0;
+			for (auto& option : Options.Key)
+			{
+				ImGui::TableNextColumn();
+				ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{0.5, 0, 0, 1});
+				if (ImGui::Button(pb::get_rc_string(option.Description), ImVec2(-1, 0)))
+				{
+					for (auto& input : option.Inputs)
+						input = {};
+				}
+				ImGui::PopStyleColor(1);
+
+				for (auto& input : option.Inputs)
+				{
+					ImGui::TableNextColumn();
+					if (ControlWaitingForInput == &input)
+					{
+						if (ImGui::Button("Press the key", ImVec2(-1, 0)))
+						{
+							ControlWaitingForInput = &input;
+						}
+					}
+					else
+					{
+						auto inputDescription = input.GetFullInputDescription();
+						if (ImGui::Button((inputDescription + "##" + std::to_string(rowHash++)).c_str(),
+						                  ImVec2(-1, 0)))
+						{
+							ControlWaitingForInput = &input;
+						}
+					}
+				}
+			}
+			ImGui::EndTable();
+		}
+		ImGui::PopStyleVar();
+		ImGui::Spacing();
+
+		if (ImGui::Button(pb::get_rc_string(Msg::GenericOk)))
+		{
+			ShowDialog = false;
+		}
+
+		ImGui::SameLine();
+		if (ImGui::Button(pb::get_rc_string(Msg::GenericCancel)))
+		{
+			for (auto& control : Options.Key)
+			{
+				control.Load();
+			}
+			ShowDialog = false;
+		}
+
+		ImGui::SameLine();
+		if (ImGui::Button(pb::get_rc_string(Msg::KEYMAPPER_Default)))
+		{
+			for (auto& control : Options.Key)
+			{
+				control.Reset();
+			}
+			ControlWaitingForInput = nullptr;
+		}
+	}
+	ImGui::End();
+	ImGui::PopStyleVar();
+
+	if (!ShowDialog)
+		ControlWaitingForInput = nullptr;
 }
 
-//void options::MyUserData_ReadLine(ImGuiContext* ctx, ImGuiSettingsHandler* handler, void* entry, const char* line)
-//{
-//	auto& keyValueStore = *static_cast<std::map<std::string, std::string>*>(entry);
-//	std::string keyValue = line;
-//	auto separatorPos = keyValue.find('=');
-//	if (separatorPos != std::string::npos)
-//	{
-//		auto key = keyValue.substr(0, separatorPos);
-//		auto value = keyValue.substr(separatorPos + 1, keyValue.size());
-//		keyValueStore[key] = value;
-//	}
-//}
-//
-//void* options::MyUserData_ReadOpen(ImGuiContext* ctx, ImGuiSettingsHandler* handler, const char* name)
-//{
-//	// There is only one custom entry
-//	return strcmp(name, "Settings") == 0 ? &settings : nullptr;
-//}
-//
-//void options::MyUserData_WriteAll(ImGuiContext* ctx, ImGuiSettingsHandler* handler, ImGuiTextBuffer* buf)
-//{
-//	buf->appendf("[%s][%s]\n", handler->TypeName, "Settings");
-//	for (const auto& setting : settings)
-//	{
-//		buf->appendf("%s=%s\n", setting.first.c_str(), setting.second.c_str());
-//	}
-//	buf->append("\n");
-//}
+std::vector<GameBindings> options::MapGameInput(GameInput key)
+{
+	std::vector<GameBindings> result;
+	for (auto inputId = GameBindings::Min; inputId < GameBindings::Max; inputId++)
+	{
+		for (auto& inputValue : Options.Key[~inputId].Inputs)
+		{
+			if (key == inputValue)
+			{
+				result.push_back(inputId);
+				break;
+			}
+		}
+	}
+	return result;
+}
 
-const std::string& options::GetSetting(const std::string& key, const std::string& value)
+void options::ResetAllOptions()
+{
+	for (const auto opt : AllOptions)
+		opt->Reset();
+	PostProcessOptions();
+}
+
+void options::MyUserData_ReadLine(ImGuiContext* ctx, ImGuiSettingsHandler* handler, void* entry, const char* line)
+{
+	auto& keyValueStore = *static_cast<std::unordered_map<std::string, std::string>*>(entry);
+	std::string keyValue = line;
+	auto separatorPos = keyValue.find('=');
+	if (separatorPos != std::string::npos)
+	{
+		auto key = keyValue.substr(0, separatorPos);
+		auto value = keyValue.substr(separatorPos + 1, keyValue.size());
+		keyValueStore[key] = value;
+	}
+}
+
+void* options::MyUserData_ReadOpen(ImGuiContext* ctx, ImGuiSettingsHandler* handler, const char* name)
+{
+	// There is only one custom entry
+	return strcmp(name, "Settings") == 0 ? &settings : nullptr;
+}
+
+void options::MyUserData_WriteAll(ImGuiContext* ctx, ImGuiSettingsHandler* handler, ImGuiTextBuffer* buf)
+{
+	buf->appendf("[%s][%s]\n", handler->TypeName, "Settings");
+	for (const auto& setting : settings)
+	{
+		buf->appendf("%s=%s\n", setting.first.c_str(), setting.second.c_str());
+	}
+	buf->append("\n");
+}
+
+void options::PostProcessOptions()
+{
+	winmain::ImIO->FontGlobalScale = Options.UIScale;
+	Options.FramesPerSecond = Clamp(Options.FramesPerSecond.V, MinFps, MaxFps);
+	Options.UpdatesPerSecond = Clamp(Options.UpdatesPerSecond.V, MinUps, MaxUps);
+	Options.UpdatesPerSecond = std::max(Options.UpdatesPerSecond.V, Options.FramesPerSecond.V);
+	Options.SoundChannels = Clamp(Options.SoundChannels.V, MinSoundChannels, MaxSoundChannels);
+	Options.SoundVolume = Clamp(Options.SoundVolume.V, MinVolume, MaxVolume);
+	Options.MusicVolume = Clamp(Options.MusicVolume.V, MinVolume, MaxVolume);
+	translations::SetCurrentLanguage(Options.Language.V.c_str());
+	winmain::UpdateFrameRate();
+}
+
+std::string GameInput::GetFullInputDescription() const
+{
+	std::string prefix;
+	switch (Type)
+	{
+	case InputTypes::Keyboard:
+		prefix = "Keyboard\n";
+		break;
+	case InputTypes::Mouse:
+		prefix = "Mouse\n";
+		break;
+	case InputTypes::GameController:
+		prefix = "Controller\n";
+		break;
+	case InputTypes::None:
+	default:
+		return "Unused";
+	}
+
+	return prefix + GetShortInputDescription();
+}
+
+std::string GameInput::GetShortInputDescription() const
+{
+	static LPCSTR mouseButtons[]
+	{
+		nullptr,
+		"Left",
+		"Middle",
+		"Right",
+		"X1",
+		"X2",
+	};
+
+	static LPCSTR controllerButtons[] =
+	{
+		"A",
+		"B",
+		"X",
+		"Y",
+		"Back",
+		"Guide",
+		"Start",
+		"LeftStick",
+		"RightStick",
+		"LeftShoulder",
+		"RightShoulder",
+		"DpUp",
+		"DpDown",
+		"DpLeft",
+		"DpRight",
+		"Misc1",
+		"Paddle1",
+		"Paddle2",
+		"Paddle3",
+		"Paddle4",
+		"Touchpad",
+	};
+
+	std::string keyName;
+	switch (Type)
+	{
+	case InputTypes::Keyboard:
+		keyName = SDL_GetKeyName(Value);
+		break;
+	case InputTypes::Mouse:
+		if (Value >= SDL_BUTTON_LEFT && Value <= SDL_BUTTON_X2)
+			keyName = mouseButtons[Value];
+		else
+			keyName = "MButton" + std::to_string(Value);
+		break;
+	case InputTypes::GameController:
+		if (Value >= SDL_CONTROLLER_BUTTON_A && Value < std::min(static_cast<int>(SDL_CONTROLLER_BUTTON_MAX), 21))
+			keyName = controllerButtons[Value];
+		else
+			keyName = "CButton" + std::to_string(Value);
+		break;
+	case InputTypes::None:
+	default:
+		break;
+	}
+
+	return keyName;
+}
+
+const std::string& options::GetSetting(const std::string& key, const std::string& defaultValue)
 {
 	auto setting = settings.find(key);
 	if (setting == settings.end())
 	{
-		settings[key] = value;
-//		if (ImGui::GetCurrentContext())
-//			ImGui::MarkIniSettingsDirty();
-		return value;
+		settings[key] = defaultValue;
+		if (ImGui::GetCurrentContext())
+			ImGui::MarkIniSettingsDirty();
+		return defaultValue;
 	}
 	return setting->second;
 }
@@ -450,6 +606,33 @@ const std::string& options::GetSetting(const std::string& key, const std::string
 void options::SetSetting(const std::string& key, const std::string& value)
 {
 	settings[key] = value;
-//	if (ImGui::GetCurrentContext())
-//		ImGui::MarkIniSettingsDirty();
+	if (ImGui::GetCurrentContext())
+		ImGui::MarkIniSettingsDirty();
+}
+
+OptionBase::OptionBase(LPCSTR name): Name(name)
+{
+	options::AllOptions.push_back(this);
+}
+
+OptionBase::~OptionBase()
+{
+	auto& vec = options::AllOptions;
+	auto position = std::find(vec.begin(), vec.end(), this);
+	if (position != vec.end())
+		vec.erase(position);
+}
+
+std::string ControlOption::GetShortcutDescription() const
+{
+	std::string result;
+	for (const auto& input : Inputs)
+	{
+		if (input.Type != InputTypes::None)
+		{
+			result = input.GetShortInputDescription();
+			break;
+		}
+	}
+	return result;
 }

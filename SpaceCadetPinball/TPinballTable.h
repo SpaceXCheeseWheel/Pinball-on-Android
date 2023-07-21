@@ -1,5 +1,6 @@
 #pragma once
 
+#include "maths.h"
 #include "TPinballComponent.h"
 
 class TBall;
@@ -15,7 +16,7 @@ struct score_struct_super
 	scoreStruct* ScoreStruct;
 	int Score;
 	int ScoreE9Part;
-	int Unknown2;
+	int JackpotScore;
 	int BallCount;
 	int ExtraBalls;
 	int BallLockedCounter;
@@ -33,7 +34,10 @@ public:
 	void ChangeBallCount(int count);
 	void tilt(float time);
 	void port_draw() override;
-	int Message(int code, float value) override;
+	int Message(MessageCode code, float value) override;
+	TBall* AddBall(vector2 position);
+	int BallCountInRect(const RectF& rect);
+	int BallCountInRect(const vector2& pos, float margin);
 
 	static void EndGame_timeout(int timerId, void* caller);
 	static void LightShow_timeout(int timerId, void* caller);
@@ -49,7 +53,7 @@ public:
 	int SoundIndex1{};
 	int SoundIndex2{};
 	int SoundIndex3{};
-	int BallInSink;
+	int BallInDrainFlag;
 	int CurScore{};
 	int CurScoreE9{};
 	int LightShowTimer;
@@ -67,27 +71,27 @@ public:
 	int Height{};
 	std::vector<TPinballComponent*> ComponentList;
 	std::vector<TBall*> BallList;
+	std::vector<TFlipper*> FlipperList;
 	TLightGroup* LightGroup;
 	float GravityDirVectMult{};
 	float GravityAngleX{};
 	float GravityAnglY{};
 	float CollisionCompOffset{};
-	float PlungerPositionX{};
-	float PlungerPositionY{};
+	vector2 PlungerPosition{};
 	int ScoreMultiplier{};
 	int ScoreAdded{};
-	int ScoreSpecial1{};
-	int ScoreSpecial2{};
-	int ScoreSpecial2Flag{};
-	int ScoreSpecial3{};
-	int ScoreSpecial3Flag{};
+	int ReflexShotScore{};
+	int BonusScore{};
+	bool BonusScoreFlag{};
+	int JackpotScore{};
+	bool JackpotScoreFlag{};
 	int UnknownP71{};
 	int BallCount{};
 	int MaxBallCount;
 	int ExtraBalls{};
-	int UnknownP75{};
+	int MultiballCount{};
 	int BallLockedCounter{};
-	int MultiballFlag;
+	bool MultiballFlag;
 	int UnknownP78{};
 	int ReplayActiveFlag{};
 	int ReplayTimer;

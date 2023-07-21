@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.10.2)
 set(CMAKE_CXX_STANDARD 11)
+
+set(PinballRoot ../../../../)
+
+
 project(SpaceCadetPinball)
 
 set(SOURCE_FILES
@@ -7,6 +11,8 @@ set(SOURCE_FILES
         ../../../../SpaceCadetPinball/control.h
         ../../../../SpaceCadetPinball/EmbeddedData.cpp
         ../../../../SpaceCadetPinball/EmbeddedData.h
+        ../../../../SpaceCadetPinball/font_selection.cpp
+        ../../../../SpaceCadetPinball/font_selection.h
         ../../../../SpaceCadetPinball/fullscrn.cpp
         ../../../../SpaceCadetPinball/fullscrn.h
         ../../../../SpaceCadetPinball/gdrv.cpp
@@ -30,8 +36,6 @@ set(SOURCE_FILES
         ../../../../SpaceCadetPinball/pb.cpp
         ../../../../SpaceCadetPinball/pb.h
         ../../../../SpaceCadetPinball/pch.h
-        ../../../../SpaceCadetPinball/pinball.cpp
-        ../../../../SpaceCadetPinball/pinball.h
         ../../../../SpaceCadetPinball/proj.cpp
         ../../../../SpaceCadetPinball/proj.h
         ../../../../SpaceCadetPinball/render.cpp
@@ -53,6 +57,8 @@ set(SOURCE_FILES
         ../../../../SpaceCadetPinball/TCollisionComponent.h
         ../../../../SpaceCadetPinball/TComponentGroup.cpp
         ../../../../SpaceCadetPinball/TComponentGroup.h
+        ../../../../SpaceCadetPinball/TDemo.cpp
+        ../../../../SpaceCadetPinball/TDemo.h
         ../../../../SpaceCadetPinball/TDrain.cpp
         ../../../../SpaceCadetPinball/TDrain.h
         ../../../../SpaceCadetPinball/TEdgeBox.h
@@ -98,6 +104,8 @@ set(SOURCE_FILES
         ../../../../SpaceCadetPinball/TPopupTarget.h
         ../../../../SpaceCadetPinball/TRamp.cpp
         ../../../../SpaceCadetPinball/TRamp.h
+        ../../../../SpaceCadetPinball/translations.cpp
+        ../../../../SpaceCadetPinball/translations.h
         ../../../../SpaceCadetPinball/TRollover.cpp
         ../../../../SpaceCadetPinball/TRollover.h
         ../../../../SpaceCadetPinball/TSink.cpp
@@ -122,6 +130,27 @@ set(SOURCE_FILES
         ../../../../SpaceCadetPinball/winmain.h
         ../../../../SpaceCadetPinball/zdrv.cpp
         ../../../../SpaceCadetPinball/zdrv.h
+        ../../../../SpaceCadetPinball/imconfig.h
+        ../../../../SpaceCadetPinball/imgui_internal.h
+        ../../../../SpaceCadetPinball/imgui.cpp
+        ../../../../SpaceCadetPinball/imgui.h
+        ../../../../SpaceCadetPinball/imgui_sdl.cpp
+        ../../../../SpaceCadetPinball/imgui_sdl.h
+        ../../../../SpaceCadetPinball/imgui_draw.cpp
+        ../../../../SpaceCadetPinball/imgui_widgets.cpp
+        ../../../../SpaceCadetPinball/imgui_tables.cpp
+        ../../../../SpaceCadetPinball/imgui_demo.cpp
+        ../../../../SpaceCadetPinball/imgui_impl_sdl.cpp
+        ../../../../SpaceCadetPinball/imgui_impl_sdl.h
+        ../../../../SpaceCadetPinball/imgui_impl_sdlrenderer.h
+        ../../../../SpaceCadetPinball/imgui_impl_sdlrenderer.cpp
+        ../../../../SpaceCadetPinball/imstb_textedit.h
+        ../../../../SpaceCadetPinball/imstb_rectpack.h
+        ../../../../SpaceCadetPinball/imstb_truetype.h
+        ../../../../SpaceCadetPinball/DebugOverlay.cpp
+        ../../../../SpaceCadetPinball/DebugOverlay.h
+
+
         SpaceCadetPinballJNI.cpp
         SpaceCadetPinballJNI.h)
 

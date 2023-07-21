@@ -124,5 +124,5 @@ public:
 	void Finalize();
 
 private:
-	void AddMsgFont(const MsgFont* font, const std::string& fontName);
+	void AddMsgFont(MsgFont* font, const std::string& fontName);
 };

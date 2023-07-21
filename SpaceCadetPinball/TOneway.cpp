@@ -25,7 +25,7 @@ TOneway::TOneway(TPinballTable* table, int groupIndex) : TCollisionComponent(tab
 		if (line)
 		{
 			line->Offset(table->CollisionCompOffset);
-			line->place_in_grid();
+			line->place_in_grid(&AABB);
 			EdgeList.push_back(line);
 		}
 
@@ -34,25 +34,25 @@ TOneway::TOneway(TPinballTable* table, int groupIndex) : TCollisionComponent(tab
 		if (line)
 		{
 			line->Offset(-table->CollisionCompOffset * 0.8f);
-			Line->place_in_grid();
+			Line->place_in_grid(&AABB);
 			EdgeList.push_back(Line);
 		}
 	}
 }
 
-void TOneway::Collision(TBall* ball, vector2* nextPosition, vector2* direction, float coef, TEdgeSegment* edge)
+void TOneway::Collision(TBall* ball, vector2* nextPosition, vector2* direction, float distance, TEdgeSegment* edge)
 {
 	if (edge == Line)
 	{
 		ball->not_again(edge);
 		ball->Position.X = nextPosition->X;
 		ball->Position.Y = nextPosition->Y;
-		ball->RayMaxDistance -= coef;
+		ball->RayMaxDistance -= distance;
 		if (!PinballTable->TiltLockFlag)
 		{
 			if (HardHitSoundId)
-				loader::play_sound(HardHitSoundId);
-			control::handler(63, this);
+				loader::play_sound(HardHitSoundId, ball, "TOneway1");
+			control::handler(MessageCode::ControlCollision, this);
 		}
 	}
 	else if (PinballTable->TiltLockFlag)
@@ -69,17 +69,6 @@ void TOneway::Collision(TBall* ball, vector2* nextPosition, vector2* direction, 
 		Boost) > 0.2f)
 	{
 		if (SoftHitSoundId)
-			loader::play_sound(SoftHitSoundId);
+			loader::play_sound(SoftHitSoundId, ball, "TOneway2");
 	}
-}
-
-void TOneway::put_scoring(int index, int score)
-{
-	if (index < 6)
-		Scores[index] = score;
-}
-
-int TOneway::get_scoring(int index)
-{
-	return index < 6 ? Scores[index] : 0;
 }

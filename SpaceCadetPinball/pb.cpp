@@ -5,7 +5,6 @@
 #include "control.h"
 #include "fullscrn.h"
 #include "high_score.h"
-#include "pinball.h"
 #include "proj.h"
 #include "render.h"
 #include "loader.h"
@@ -24,27 +23,36 @@
 #include "GroupData.h"
 #include "partman.h"
 #include "score.h"
+#include "TFlipper.h"
 #include "TPinballTable.h"
 #include "TTextBox.h"
+#include "translations.h"
 
 TPinballTable* pb::MainTable = nullptr;
 DatFile* pb::record_table = nullptr;
 int pb::time_ticks = 0;
 GameModes pb::game_mode = GameModes::GameOver;
-float pb::time_now = 0, pb::time_next = 0, pb::ball_speed_limit, pb::time_ticks_remainder = 0;
-high_score_struct pb::highscore_table[5];
-bool pb::FullTiltMode = false, pb::cheat_mode = false, pb::demo_mode = false;
+float pb::time_now = 0, pb::time_next = 0, pb::time_ticks_remainder = 0;
+float pb::BallMaxSpeed, pb::BallHalfRadius, pb::BallToBallCollisionDistance;
+float pb::IdleTimerMs = 0;
+bool pb::FullTiltMode = false, pb::FullTiltDemoMode = false, pb::cheat_mode = false, pb::demo_mode = false, pb::CreditsActive = false;
+std::string pb::DatFileName, pb::BasePath;
+ImU32 pb::TextBoxColor;
+int pb::quickFlag = 0;
+TTextBox *pb::InfoTextBox, *pb::MissTextBox;
 
 
 int pb::init()
 {
-	float projMat[12], zMin = 0, zScaler = 0;
+	float projMat[12];
 
-	auto dataFilePath = pinball::make_path_name(winmain::DatFileName);
+	if (DatFileName.empty())
+		return 1;
+	auto dataFilePath = make_path_name(DatFileName);
 	record_table = partman::load_records(dataFilePath.c_str(), FullTiltMode);
 
 	auto useBmpFont = 0;
-	pinball::get_rc_int(158, &useBmpFont);
+	get_rc_int(Msg::TextBoxUseBitmapFont, &useBmpFont);
 	if (useBmpFont)
 		score::load_msg_font("pbmsg_ft");
 
@@ -69,12 +77,12 @@ int pb::init()
 		auto projCenterX = resInfo->TableWidth * 0.5f;
 		auto projCenterY = resInfo->TableHeight * 0.5f;
 		auto projD = cameraInfo[0];
-		proj::init(projMat, projD, projCenterX, projCenterY);
-		zMin = cameraInfo[1];
-		zScaler = cameraInfo[2];
+		auto zMin = cameraInfo[1];
+		auto zScaler = cameraInfo[2];
+		proj::init(projMat, projD, projCenterX, projCenterY, zMin, zScaler);
 	}
 
-	render::init(nullptr, zMin, zScaler, resInfo->TableWidth, resInfo->TableHeight);
+	render::init(nullptr, resInfo->TableWidth, resInfo->TableHeight);
 	gdrv::copy_bitmap(
 		render::vscreen,
 		backgroundBmp->Width,
@@ -95,8 +103,18 @@ int pb::init()
 
 	MainTable = new TPinballTable();
 
-	high_score::read(highscore_table);
-	ball_speed_limit = MainTable->BallList.at(0)->Offset * 200.0f;
+	high_score::read();
+	auto ball = MainTable->BallList.at(0);
+	BallMaxSpeed = ball->Radius * 200.0f;
+	BallHalfRadius = ball->Radius * 0.5f;
+	BallToBallCollisionDistance = (ball->Radius + BallHalfRadius) * 2.0f;
+
+	int red = 255, green = 255, blue = 255;
+	auto fontColor = get_rc_string(Msg::TextBoxColor);
+	if (fontColor)
+		sscanf(fontColor, "%d %d %d", &red, &green, &blue);
+	TextBoxColor = IM_COL32(red, green, blue, 255);
+
 	return 0;
 }
 
@@ -105,7 +123,7 @@ int pb::uninit()
 	score::unload_msg_font();
 	loader::unload();
 	delete record_table;
-	high_score::write(highscore_table);
+	high_score::write();
 	delete MainTable;
 	MainTable = nullptr;
 	timer::uninit();
@@ -113,10 +131,60 @@ int pb::uninit()
 	return 0;
 }
 
+void pb::SelectDatFile(const std::vector<const char*>& dataSearchPaths)
+{
+	DatFileName.clear();
+	FullTiltDemoMode = FullTiltMode = false;
+
+	std::string datFileNames[3]
+	{
+		"CADET.DAT",
+		"PINBALL.DAT",
+		"DEMO.DAT",
+	};
+
+	// Default game data test order: CADET.DAT, PINBALL.DAT, DEMO.DAT
+	if (options::Options.Prefer3DPBGameData)
+	{
+		std::swap(datFileNames[0], datFileNames[1]);
+	}
+	for (auto path : dataSearchPaths)
+	{
+		if (!path)
+			continue;
+
+		BasePath = path;
+		for (const auto& datFileName : datFileNames)
+		{
+			auto fileName = datFileName;
+			for (int i = 0; i < 2; i++)
+			{
+				if (i == 1)
+					std::transform(fileName.begin(), fileName.end(), fileName.begin(),
+					               [](unsigned char c) { return std::tolower(c); });
+
+				auto datFilePath = make_path_name(fileName);
+				auto datFile = fopenu(datFilePath.c_str(), "r");
+				if (datFile)
+				{
+					fclose(datFile);
+					DatFileName = fileName;
+					if (datFileName == "CADET.DAT")
+						FullTiltMode = true;
+					if (datFileName == "DEMO.DAT")
+						FullTiltDemoMode = FullTiltMode = true;
+					printf("Loading game from: %s\n", datFilePath.c_str());
+					return;
+				}
+			}
+		}
+	}
+}
+
 void pb::reset_table()
 {
 	if (MainTable)
-		MainTable->Message(1024, 0.0);
+		MainTable->Message(MessageCode::Reset, 0.0);
 }
 
 
@@ -127,6 +195,11 @@ void pb::firsttime_setup()
 
 void pb::mode_change(GameModes mode)
 {
+	if (CreditsActive)
+		MissTextBox->Clear(true);
+	CreditsActive = false;
+	IdleTimerMs = 0;
+
 	switch (mode)
 	{
 	case GameModes::InGame:
@@ -161,7 +234,7 @@ void pb::mode_change(GameModes mode)
 			winmain::DemoActive = false;
 		}
 		if (MainTable && MainTable->LightGroup)
-			MainTable->LightGroup->Message(29, 1.4f);
+			MainTable->LightGroup->Message(MessageCode::TLightGroupGameOverAnimation, 1.4f);
 		break;
 	}
 	game_mode = mode;
@@ -172,11 +245,10 @@ void pb::toggle_demo()
 	if (demo_mode)
 	{
 		demo_mode = false;
-		MainTable->Message(1024, 0.0);
+		MainTable->Message(MessageCode::Reset, 0.0);
 		mode_change(GameModes::GameOver);
-		pinball::MissTextBox->Clear(1);
-		auto text = pinball::get_rc_string(24, 0);
-		pinball::InfoTextBox->Display(text, -1.0, 2);
+		MissTextBox->Clear();
+		InfoTextBox->Display(get_rc_string(Msg::STRING125), -1.0);
 	}
 	else
 	{
@@ -187,21 +259,27 @@ void pb::toggle_demo()
 void pb::replay_level(bool demoMode)
 {
 	demo_mode = demoMode;
-	SpaceCadetPinballJNI::notifyGameState(SpaceCadetPinballJNI::GAMESTATE::RUNNING);
 	mode_change(GameModes::InGame);
 	if (options::Options.Music)
-		midi::play_pb_theme();
-	MainTable->Message(1014, static_cast<float>(options::Options.Players));
+		midi::music_play();
+	MainTable->Message(MessageCode::NewGame, static_cast<float>(options::Options.Players));
 }
 
 void pb::ballset(float dx, float dy)
 {
 	// dx and dy are normalized to window, ideally in [-1, 1]
 	static constexpr float sensitivity = 7000;
-	TBall* ball = MainTable->BallList.at(0);
-	ball->Acceleration.X = dx * sensitivity;
-	ball->Acceleration.Y = dy * sensitivity;
-    ball->Speed = maths::normalize_2d(ball->Acceleration);
+
+	for (auto ball : MainTable->BallList)
+	{
+		if (ball->ActiveFlag)
+		{
+			ball->Direction.X = dx * sensitivity;
+			ball->Direction.Y = dy * sensitivity;
+			ball->Speed = maths::normalize_2d(ball->Direction);
+			ball->LastActiveTime = time_ticks;
+		}
+	}
 }
 
 void pb::frame(float dtMilliSec)
@@ -211,9 +289,18 @@ void pb::frame(float dtMilliSec)
 	if (dtMilliSec <= 0)
 		return;
 
+	if (FullTiltMode && !demo_mode)
+	{
+		IdleTimerMs += dtMilliSec;
+		if (IdleTimerMs >= 60000 && !CreditsActive)
+		{
+			PushCheat("credits");
+		}
+	}
+
 	float dtSec = dtMilliSec * 0.001f;
 	time_next = time_now + dtSec;
-	timed_frame(time_now, dtSec, true);
+	timed_frame(dtSec);
 	time_now = time_next;
 
 	dtMilliSec += time_ticks_remainder;
@@ -239,107 +326,198 @@ void pb::frame(float dtMilliSec)
 	{
 		if (nudge::nudge_count > 0.5f)
 		{
-			pinball::InfoTextBox->Display(pinball::get_rc_string(25, 0), 2.0, 2);
+			InfoTextBox->Display(get_rc_string(Msg::STRING126), 2.0);
 		}
 		if (nudge::nudge_count > 1.0f)
 			MainTable->tilt(time_now);
 	}
 }
 
-void pb::timed_frame(float timeNow, float timeDelta, bool drawBalls)
+void pb::timed_frame(float timeDelta)
 {
-    vector2 vec1{}, vec2{};
-
 	for (auto ball : MainTable->BallList)
 	{
+		if (!ball->ActiveFlag || ball->HasGroupFlag || ball->CollisionComp || ball->Speed >= 0.8f)
+		{
+			if (ball->StuckCounter > 0)
+			{
+				vector2 dist{ball->Position.X - ball->PrevPosition.X, ball->Position.Y - ball->PrevPosition.Y};
+				auto radiusX2 = ball->Radius * 2.0f;
+				if (radiusX2 * radiusX2 < maths::magnitudeSq(dist))
+					ball->StuckCounter = 0;
+			}
+			ball->LastActiveTime = time_ticks;
+		}
+		else if (time_ticks - ball->LastActiveTime > 500)
+		{
+			vector2 dist{ball->Position.X - ball->PrevPosition.X, ball->Position.Y - ball->PrevPosition.Y};
+			auto radiusD2 = ball->Radius / 2.0f;
+			ball->PrevPosition = ball->Position;
+			if (radiusD2 * radiusD2 < maths::magnitudeSq(dist))
+				ball->StuckCounter = 0;
+			else
+				ball->StuckCounter++;
+			control::UnstuckBall(*ball, time_ticks - ball->LastActiveTime);
+		}
+	}
+
+	int ballSteps[20]{};
+	float ballStepsDistance[20]{};
+	int maxStep = -1;
+	for (auto index = 0u; index < MainTable->BallList.size(); index++)
+	{
+		auto ball = MainTable->BallList[index];
+		ballSteps[index] = -1;
 		if (ball->ActiveFlag != 0)
 		{
-			auto collComp = ball->CollisionComp;
-			if (collComp)
+			vector2 vecDst{};
+			ball->TimeDelta = timeDelta;
+			if (ball->TimeDelta > 0.01f && ball->Speed < 0.8f)
+				ball->TimeDelta = 0.01f;
+			ball->CollisionDisabledFlag = false;
+			if (ball->CollisionComp)
 			{
-				ball->TimeDelta = timeDelta;
-				collComp->FieldEffect(ball, &vec1);
+				ball->CollisionComp->FieldEffect(ball, &vecDst);
 			}
 			else
 			{
-				if (MainTable->ActiveFlag)
-				{
-					vec2.X = 0.0;
-					vec2.Y = 0.0;
-					TTableLayer::edge_manager->FieldEffects(ball, &vec2);
-					vec2.X = vec2.X * timeDelta;
-					vec2.Y = vec2.Y * timeDelta;
-					ball->Acceleration.X = ball->Speed * ball->Acceleration.X;
-					ball->Acceleration.Y = ball->Speed * ball->Acceleration.Y;
-                    maths::vector_add(ball->Acceleration, vec2);
-                    ball->Speed = maths::normalize_2d(ball->Acceleration);
-					ball->InvAcceleration.X = ball->Acceleration.X == 0.0f ? 1.0e9f : 1.0f / ball->Acceleration.X;
-					ball->InvAcceleration.Y = ball->Acceleration.Y == 0.0f ? 1.0e9f : 1.0f / ball->Acceleration.Y;
-				}
+				TTableLayer::edge_manager->FieldEffects(ball, &vecDst);
+				vecDst.X *= ball->TimeDelta;
+				vecDst.Y *= ball->TimeDelta;
+				ball->Direction.X *= ball->Speed;
+				ball->Direction.Y *= ball->Speed;
+				maths::vector_add(ball->Direction, vecDst);
+				ball->Speed = maths::normalize_2d(ball->Direction);
+				if (ball->Speed > BallMaxSpeed)
+					ball->Speed = BallMaxSpeed;
 
-				auto timeDelta2 = timeDelta;
-				auto timeNow2 = timeNow;
-				for (auto index = 10; timeDelta2 > 0.000001f && index; --index)
-				{
-					auto time = collide(timeNow2, timeDelta2, ball);
-					timeDelta2 -= time;
-					timeNow2 += time;
-				}
+				ballStepsDistance[index] = ball->Speed * ball->TimeDelta;
+				auto ballStep = static_cast<int>(std::ceil(ballStepsDistance[index] / BallHalfRadius)) - 1;
+				ballSteps[index] = ballStep;
+				if (ballStep > maxStep)
+					maxStep = ballStep;
 			}
 		}
 	}
 
-	if (drawBalls)
+	float deltaAngle[4]{};
+	int flipperSteps[4]{};
+	for (auto index = 0u; index < MainTable->FlipperList.size(); index++)
 	{
-		for (auto ball : MainTable->BallList)
+		auto flipStep = MainTable->FlipperList[index]->GetFlipperStepAngle(timeDelta, &deltaAngle[index]) - 1;
+		flipperSteps[index] = flipStep;
+		if (flipStep > maxStep)
+			maxStep = flipStep;
+	}
+
+	ray_type ray{};
+	ray.MinDistance = 0.002f;
+	for (auto step = 0; step <= maxStep; step++)
+	{
+		for (auto ballIndex = 0u; ballIndex < MainTable->BallList.size(); ballIndex++)
 		{
-			if (ball->ActiveFlag)
-				ball->Repaint();
+			auto ball = MainTable->BallList[ballIndex];
+			if (!ball->CollisionDisabledFlag && ballSteps[ballIndex] >= step)
+			{
+				ray.CollisionMask = ball->CollisionMask;
+
+				for (auto distanceSum = 0.0f; distanceSum < BallHalfRadius;)
+				{
+					ray.Origin = ball->Position;
+					ray.Direction = ball->Direction;
+					if (ballSteps[ballIndex] <= step)
+					{
+						ray.MaxDistance = ballStepsDistance[ballIndex] - ballSteps[ballIndex] * BallHalfRadius;
+					}
+					else
+					{
+						ray.MaxDistance = BallHalfRadius;
+					}
+
+					TEdgeSegment* edge = nullptr;
+					auto distance = TTableLayer::edge_manager->FindCollisionDistance(&ray, ball, &edge);
+					if (distance > 0.0f)
+					{
+						distance = BallToBallCollision(ray, *ball, &edge, distance);
+					}
+					if (ball->EdgeCollisionResetFlag)
+					{
+						ball->EdgeCollisionResetFlag = false;
+					}
+					else
+					{
+						ball->EdgeCollisionCount = 0;
+						ball->EdgeCollisionResetFlag = true;
+					}
+					if (distance >= 1e9f)
+					{
+						ball->Position.X += ray.MaxDistance * ray.Direction.X;
+						ball->Position.Y += ray.MaxDistance * ray.Direction.Y;
+						break;
+					}
+
+					edge->EdgeCollision(ball, distance);
+					if (distance <= 0.0f || ball->CollisionDisabledFlag)
+						break;
+					distanceSum += distance;
+				}
+			}
+		}
+
+		for (auto flipIndex = 0u; flipIndex < MainTable->FlipperList.size(); flipIndex++)
+		{
+			if (flipperSteps[flipIndex] >= step)
+				MainTable->FlipperList[flipIndex]->FlipperCollision(deltaAngle[flipIndex]);
 		}
 	}
-}
 
-void pb::window_size(int* width, int* height)
-{
-	*width = fullscrn::resolution_array[fullscrn::GetResolution()].TableWidth;
-	*height = fullscrn::resolution_array[fullscrn::GetResolution()].TableHeight;
+	for (const auto flipper : MainTable->FlipperList)
+	{
+		flipper->UpdateSprite();
+	}
+
+	for (auto ball : MainTable->BallList)
+	{
+		if (ball->ActiveFlag)
+			ball->Repaint();
+	}
 }
 
 void pb::pause_continue()
 {
 	winmain::single_step ^= true;
-	pinball::InfoTextBox->Clear(2);
-	pinball::MissTextBox->Clear(1);
+	InfoTextBox->Clear();
+	MissTextBox->Clear();
 	if (winmain::single_step)
 	{
 		if (MainTable)
-			MainTable->Message(1008, time_now);
-		pinball::InfoTextBox->Display(pinball::get_rc_string(22, 0), -1.0, 2);
+			MainTable->Message(MessageCode::Pause, time_now);
+		InfoTextBox->Display(get_rc_string(Msg::STRING123), -1.0);
 		midi::music_stop();
 		Sound::Deactivate();
 	}
 	else
 	{
 		if (MainTable)
-			MainTable->Message(1009, 0.0);
+			MainTable->Message(MessageCode::Resume, 0.0);
 		if (!demo_mode)
 		{
-			char* text;
+			const char* text;
 			float textTime;
 			if (game_mode == GameModes::GameOver)
 			{
 				textTime = -1.0;
-				text = pinball::get_rc_string(24, 0);
+				text = get_rc_string(Msg::STRING125);
 			}
 			else
 			{
 				textTime = 5.0;
-				text = pinball::get_rc_string(23, 0);
+				text = get_rc_string(Msg::STRING124);
 			}
-			pinball::InfoTextBox->Display(text, textTime, 2);
+			InfoTextBox->Display(text, textTime);
 		}
 		if (options::Options.Music && !winmain::single_step)
-			midi::play_pb_theme();
+			midi::music_play();
 		Sound::Activate();
 	}
 }
@@ -347,7 +525,7 @@ void pb::pause_continue()
 void pb::loose_focus()
 {
 	if (MainTable)
-		MainTable->Message(1010, time_now);
+		MainTable->Message(MessageCode::LooseFocus, time_now);
 }
 
 void pb::InputUp(GameInput input)
@@ -355,67 +533,86 @@ void pb::InputUp(GameInput input)
 	if (game_mode != GameModes::InGame || winmain::single_step || demo_mode)
 		return;
 
-	if (AnyBindingMatchesInput(options::Options.Key.LeftFlipper, input))
+	const auto bindings = options::MapGameInput(input);
+	for (const auto binding : bindings)
 	{
-		MainTable->Message(1001, time_now);
-	}
-	if (AnyBindingMatchesInput(options::Options.Key.RightFlipper, input))
-	{
-		MainTable->Message(1003, time_now);
-	}
-	if (AnyBindingMatchesInput(options::Options.Key.Plunger, input))
-	{
-		MainTable->Message(1005, time_now);
-	}
-	if (AnyBindingMatchesInput(options::Options.Key.LeftTableBump, input))
-	{
-		nudge::un_nudge_right(0, nullptr);
-	}
-	if (AnyBindingMatchesInput(options::Options.Key.RightTableBump, input))
-	{
-		nudge::un_nudge_left(0, nullptr);
-	}
-	if (AnyBindingMatchesInput(options::Options.Key.BottomTableBump, input))
-	{
-		nudge::un_nudge_up(0, nullptr);
+		switch (binding)
+		{
+		case GameBindings::LeftFlipper:
+			MainTable->Message(MessageCode::LeftFlipperInputReleased, time_now);
+			break;
+		case GameBindings::RightFlipper:
+			MainTable->Message(MessageCode::RightFlipperInputReleased, time_now);
+			break;
+		case GameBindings::Plunger:
+			MainTable->Message(MessageCode::PlungerInputReleased, time_now);
+			break;
+		case GameBindings::LeftTableBump:
+			nudge::un_nudge_right(0, nullptr);
+			break;
+		case GameBindings::RightTableBump:
+			nudge::un_nudge_left(0, nullptr);
+			break;
+		case GameBindings::BottomTableBump:
+			nudge::un_nudge_up(0, nullptr);
+			break;
+		default: break;
+		}
 	}
 }
 
 void pb::InputDown(GameInput input)
 {
-	options::InputDown(input);
-	if (game_mode != GameModes::InGame ||winmain::single_step || demo_mode)
+	if (options::WaitingForInput())
+	{
+		options::InputDown(input);
 		return;
+	}
+
+	const auto bindings = options::MapGameInput(input);
+	for (const auto binding : bindings)
+	{
+		winmain::HandleGameBinding(binding, true);
+	}
+
+	if (game_mode != GameModes::InGame || winmain::single_step || demo_mode)
+		return;
+
+	if (CreditsActive)
+		MissTextBox->Clear(true);
+	CreditsActive = false;
+	IdleTimerMs = 0;
 
 	if (input.Type == InputTypes::Keyboard)
 		control::pbctrl_bdoor_controller(static_cast<char>(input.Value));
 
-	if (AnyBindingMatchesInput(options::Options.Key.LeftFlipper, input))
+	for (const auto binding : bindings)
 	{
-		MainTable->Message(1000, time_now);
-	}
-	if (AnyBindingMatchesInput(options::Options.Key.RightFlipper, input))
-	{
-		MainTable->Message(1002, time_now);
-	}
-	if (AnyBindingMatchesInput(options::Options.Key.Plunger, input))
-	{
-		MainTable->Message(1004, time_now);
-	}
-	if (AnyBindingMatchesInput(options::Options.Key.LeftTableBump, input))
-	{
-		if (!MainTable->TiltLockFlag)
-			nudge::nudge_right();
-	}
-	if (AnyBindingMatchesInput(options::Options.Key.RightTableBump, input))
-	{
-		if (!MainTable->TiltLockFlag)
-			nudge::nudge_left();
-	}
-	if (AnyBindingMatchesInput(options::Options.Key.BottomTableBump, input))
-	{
-		if (!MainTable->TiltLockFlag)
-			nudge::nudge_up();
+		switch (binding)
+		{
+		case GameBindings::LeftFlipper:
+			MainTable->Message(MessageCode::LeftFlipperInputPressed, time_now);
+			break;
+		case GameBindings::RightFlipper:
+			MainTable->Message(MessageCode::RightFlipperInputPressed, time_now);
+			break;
+		case GameBindings::Plunger:
+			MainTable->Message(MessageCode::PlungerInputPressed, time_now);
+			break;
+		case GameBindings::LeftTableBump:
+			if (!MainTable->TiltLockFlag)
+				nudge::nudge_right();
+			break;
+		case GameBindings::RightTableBump:
+			if (!MainTable->TiltLockFlag)
+				nudge::nudge_left();
+			break;
+		case GameBindings::BottomTableBump:
+			if (!MainTable->TiltLockFlag)
+				nudge::nudge_up();
+			break;
+		default: break;
+		}
 	}
 
 	if (cheat_mode && input.Type == InputTypes::Keyboard)
@@ -423,39 +620,19 @@ void pb::InputDown(GameInput input)
 		switch (input.Value)
 		{
 		case 'b':
-			TBall* ball;
-			if (MainTable->BallList.empty())
 			{
-				ball = new TBall(MainTable);
+				vector2 pos{6.0f, 7.0f};
+				if (!MainTable->BallCountInRect(pos, MainTable->CollisionCompOffset * 1.2f) && MainTable->AddBall(pos))
+					MainTable->MultiballCount++;
+				break;
 			}
-			else
-			{
-				for (auto index = 0u; ;)
-				{
-					ball = MainTable->BallList.at(index);
-					if (!ball->ActiveFlag)
-						break;
-					++index;
-					if (index >= MainTable->BallList.size())
-					{
-						ball = new TBall(MainTable);
-						break;
-					}
-				}
-			}
-			ball->ActiveFlag = 1;
-            ball->Position.X = 1.0;
-			ball->Position.Z = ball->Offset;
-			ball->Position.Y = 1.0;
-			ball->Acceleration.Z = 0.0;
-			ball->Acceleration.Y = 0.0;
-			ball->Acceleration.X = 0.0;
-			break;
 		case 'h':
-			char String1[200];
-			strncpy(String1, pinball::get_rc_string(26, 0), sizeof String1 - 1);
-			high_score::show_and_set_high_score_dialog(highscore_table, 1000000000, 1, String1);
-			break;
+			{
+				high_score_struct entry{{0}, 1000000000};
+				strncpy(entry.Name, get_rc_string(Msg::STRING127), sizeof entry.Name - 1);
+				high_score::show_and_set_high_score_dialog({entry, 1});
+				break;
+			}
 		case 'r':
 			control::cheat_bump_rank();
 			break;
@@ -465,21 +642,25 @@ void pb::InputDown(GameInput input)
 		case SDLK_F12:
 			MainTable->port_draw();
 			break;
+		case 'i':
+			MainTable->LightGroup->Message(MessageCode::TLightFtTmpOverrideOn, 1.0f);
+			break;
+		case 'j':
+			MainTable->LightGroup->Message(MessageCode::TLightFtTmpOverrideOff, 1.0f);
+			break;
 		}
 	}
 }
 
 void pb::launch_ball()
 {
-	MainTable->Plunger->Message(1017, 0.0f);
+	MainTable->Plunger->Message(MessageCode::PlungerLaunchBall, 0.0f);
 }
 
 void pb::end_game()
 {
-	SpaceCadetPinballJNI::notifyGameState(SpaceCadetPinballJNI::GAMESTATE::FINISHED);
 	int scores[4]{};
 	int scoreIndex[4]{};
-	char String1[200];
 
 	mode_change(GameModes::GameOver);
 	int playerCount = MainTable->PlayerCount;
@@ -513,11 +694,27 @@ void pb::end_game()
 	{
 		for (auto i = 0; i < playerCount; ++i)
 		{
-			int position = high_score::get_score_position(highscore_table, scores[i]);
+			int position = high_score::get_score_position(scores[i]);
 			if (position >= 0)
 			{
-				strncpy(String1, pinball::get_rc_string(scoreIndex[i] + 26, 0), sizeof String1 - 1);
-				high_score::show_and_set_high_score_dialog(highscore_table, scores[i], position, String1);
+				high_score_struct entry{{0}, scores[i]};
+				const char* playerName;
+
+				switch (scoreIndex[i])
+				{
+				default:
+				case 0: playerName = get_rc_string(Msg::STRING127);
+					break;
+				case 1: playerName = get_rc_string(Msg::STRING128);
+					break;
+				case 2: playerName = get_rc_string(Msg::STRING129);
+					break;
+				case 3: playerName = get_rc_string(Msg::STRING130);
+					break;
+				}
+
+				strncpy(entry.Name, playerName, sizeof entry.Name - 1);
+				high_score::show_and_set_high_score_dialog({entry, -1});
 			}
 		}
 	}
@@ -525,69 +722,27 @@ void pb::end_game()
 
 void pb::high_scores()
 {
-	high_score::show_high_score_dialog(highscore_table);
+	high_score::show_high_score_dialog();
 }
 
 void pb::tilt_no_more()
 {
 	if (MainTable->TiltLockFlag)
-		pinball::InfoTextBox->Clear(2);
+		InfoTextBox->Clear();
 	MainTable->TiltLockFlag = 0;
 	nudge::nudge_count = -2.0;
 }
 
 bool pb::chk_highscore()
 {
-	int playerIndex = MainTable->PlayerCount - 1;
-	int currscore = MainTable->PlayerScores[playerIndex].ScoreStruct->Score;
-	SpaceCadetPinballJNI::addHighScore(currscore);
-	int oldscore = SpaceCadetPinballJNI::getHighScore();
-    if (currscore > oldscore) return true;
-    else return false;
-}
-
-float pb::collide(float timeNow, float timeDelta, TBall* ball)
-{
-	ray_type ray{};
-	vector2 positionMod{};
-
-	if (ball->ActiveFlag && !ball->CollisionComp)
+	if (demo_mode)
+		return false;
+	for (auto i = 0; i < MainTable->PlayerCount; ++i)
 	{
-		if (ball_speed_limit < ball->Speed)
-			ball->Speed = ball_speed_limit;
-
-		auto maxDistance = timeDelta * ball->Speed;
-		ball->TimeDelta = timeDelta;
-		ball->RayMaxDistance = maxDistance;
-		ball->TimeNow = timeNow;
-
-        ray.Origin = ball->Position;
-        ray.Direction = ball->Acceleration;
-		ray.MaxDistance = maxDistance;
-		ray.FieldFlag = ball->FieldFlag;
-		ray.TimeNow = timeNow;
-		ray.TimeDelta = timeDelta;
-		ray.MinDistance = 0.0020000001f;
-
-		TEdgeSegment* edge = nullptr;
-		auto distance = TTableLayer::edge_manager->FindCollisionDistance(&ray, ball, &edge);
-		ball->EdgeCollisionCount = 0;
-		if (distance >= 1000000000.0f)
-		{
-			maxDistance = timeDelta * ball->Speed;
-			ball->RayMaxDistance = maxDistance;
-			positionMod.X = maxDistance * ball->Acceleration.X;
-			positionMod.Y = maxDistance * ball->Acceleration.Y;
-            maths::vector_add(ball->Position, positionMod);
-		}
-		else
-		{
-			edge->EdgeCollision(ball, distance);
-			if (ball->Speed > 0.000000001f)
-				return fabs(distance / ball->Speed);
-		}
+		if (high_score::get_score_position(MainTable->PlayerScores[i].ScoreStruct->Score) >= 0)
+			return true;
 	}
-	return timeDelta;
+	return false;
 }
 
 void pb::PushCheat(const std::string& cheat)
@@ -596,10 +751,48 @@ void pb::PushCheat(const std::string& cheat)
 		control::pbctrl_bdoor_controller(ch);
 }
 
-bool pb::AnyBindingMatchesInput(GameInput (&options)[3], GameInput key)
+LPCSTR pb::get_rc_string(Msg uID)
 {
-	for (auto& option : options)
-		if (key == option)
-			return true;
-	return false;
+	return translations::GetTranslation(uID);
+}
+
+int pb::get_rc_int(Msg uID, int* dst)
+{
+	*dst = atoi(get_rc_string(uID));
+	return 1;
+}
+
+std::string pb::make_path_name(const std::string& fileName)
+{
+	return BasePath + fileName;
+}
+
+void pb::ShowMessageBox(Uint32 flags, LPCSTR title, LPCSTR message)
+{
+	fprintf(flags == SDL_MESSAGEBOX_ERROR ? stderr : stdout, "BL error: %s\n%s\n", title, message);
+	SDL_ShowSimpleMessageBox(flags, title, message, winmain::MainWindow);
+}
+
+float pb::BallToBallCollision(const ray_type& ray, const TBall& ball, TEdgeSegment** edge, float collisionDistance)
+{
+	for (const auto curBall : MainTable->BallList)
+	{
+		if (curBall->ActiveFlag && curBall != &ball && (curBall->CollisionMask & ball.CollisionMask) != 0 &&
+			std::abs(curBall->Position.X - ball.Position.X) < BallToBallCollisionDistance &&
+			std::abs(curBall->Position.Y - ball.Position.Y) < BallToBallCollisionDistance)
+		{
+			auto distance = curBall->FindCollisionDistance(ray);
+			if (distance < 1e9f)
+			{
+				distance = std::max(0.0f, distance - 0.002f);
+				if (distance < collisionDistance)
+				{
+					collisionDistance = distance;
+					*edge = curBall;
+				}
+			}
+		}
+	}
+
+	return collisionDistance;
 }

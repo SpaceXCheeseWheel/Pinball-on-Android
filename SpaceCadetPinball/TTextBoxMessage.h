@@ -6,9 +6,9 @@ public:
 	char* Text;
 	float Time;
 	int EndTicks;
-	int Type; // 1 mission, 2 info
+	bool LowPriority;
 
-	TTextBoxMessage(const char* text, float time, int type);
+	TTextBoxMessage(const char* text, float time, bool lowPriority);
 	~TTextBoxMessage();
 	float TimeLeft() const;
 	void Refresh(float time);

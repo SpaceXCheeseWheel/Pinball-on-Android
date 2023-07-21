@@ -1,7 +1,8 @@
 #include "SpaceCadetPinballJNI.h"
 #include "../../../../SpaceCadetPinball/winmain.h"
 #include "../../../../SpaceCadetPinball/Sound.h"
-#include "../../../../SpaceCadetPinball/pinball.h"
+// #include "../../../../SpaceCadetPinball/pinball.h"
+#include "../../../../SpaceCadetPinball/pb.h"
 #include "../../../../SpaceCadetPinball/control.h"
 #include <jni.h>
 #include <android/log.h>
@@ -119,7 +120,7 @@ extern "C"
 JNIEXPORT void JNICALL
 Java_com_fexed_spacecadetpinball_MainActivity_initNative(JNIEnv *env, jobject thiz,
         jstring data_path) {
-winmain::BasePath = (char *) env->GetStringUTFChars(data_path, nullptr);
+pb::BasePath = (char *) env->GetStringUTFChars(data_path, nullptr);
     env->GetJavaVM(&g_JavaVM);
 }
 extern "C"
@@ -132,10 +133,13 @@ extern "C"
 JNIEXPORT void JNICALL
 Java_com_fexed_spacecadetpinball_MainActivity_putString(JNIEnv *env, jobject thiz, jint id, jstring str) {
     LPCSTR mstr = (*env).GetStringUTFChars(str, nullptr);
-    pinball::set_rc_string(id, mstr);
+    // ANDROID_PORT TODO: Replaced by something?
+    // pb::set_rc_string(id, mstr);
 }
 extern "C"
 JNIEXPORT jboolean JNICALL
 Java_com_fexed_spacecadetpinball_MainActivity_checkCheatsUsed(JNIEnv *env, jobject thiz) {
-    return control::check_cheats();
+    // ANDROID_PORT TODO: Replace Cheat Check
+    //return control::check_cheats();
+    return false;
 }

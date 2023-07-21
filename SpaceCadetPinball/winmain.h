@@ -1,6 +1,8 @@
 #pragma once
 #include "gdrv.h"
 
+enum class GameBindings;
+
 struct SdlTickClock
 {
 	using duration = std::chrono::milliseconds;
@@ -33,6 +35,30 @@ struct SdlPerformanceClock
 	}
 };
 
+struct WelfordState
+{
+	double mean;
+	double M2;
+	int64_t count;
+
+	WelfordState() : mean(0.005), M2(0), count(1)
+	{
+	}
+
+	void Advance(double newValue)
+	{
+		++count;
+		auto delta = newValue - mean;
+		mean += delta / count;
+		M2 += delta * (newValue - mean); //M2n = M2n-1 + (Xn - AvgXn-1) * (Xn - AvgXn)
+	}
+
+	double GetStdDev() const
+	{
+		return std::sqrt(M2 / (count - 1)); // Sn^2 = M2n / (n - 1)
+	}
+};
+
 class winmain
 {
 	using Clock = SdlPerformanceClock; // Or std::chrono::steady_clock.
@@ -40,14 +66,14 @@ class winmain
 	using TimePoint = std::chrono::time_point<Clock>;
 
 public:
-	static std::string DatFileName;
+	static constexpr const char* Version = "2.1.0 DEV";
 	static bool single_step;
 	static SDL_Window* MainWindow;
 	static SDL_Renderer* Renderer;
+	static ImGuiIO* ImIO;
 	static bool LaunchBallEnabled;
 	static bool HighScoresEnabled;
 	static bool DemoActive;
-	static char* BasePath;
 	static int MainMenuHeight;
 
 	static int WinMain(LPCSTR lpCmdLine);
@@ -59,21 +85,32 @@ public:
 	static void new_game();
 	static void pause(bool toggle = true);
 	static void Restart();
-	static bool RestartRequested() { return restart; }
 	static void UpdateFrameRate();
+	static void HandleGameBinding(GameBindings binding, bool shortcut);
 private:
-	static int return_value, DispFrameRate, DispGRhistory;
+	static int return_value;
 	static int mouse_down, last_mouse_x, last_mouse_y;
-	static bool no_time_loss, activated, bQuit, has_focus;
-	static gdrv_bitmap8* gfr_display;
-	static std::string FpsDetails;
+	static bool no_time_loss, activated, bQuit, has_focus, DispGRhistory, DispFrameRate;
+	static std::vector<float> gfrDisplay;
+	static std::string FpsDetails, PrevSdlError;
 	static bool restart;
 	static bool ShowAboutDialog;
 	static bool ShowImGuiDemo;
 	static bool ShowSpriteViewer;
+	static bool ShowExitPopup;
 	static double UpdateToFrameRatio;
 	static DurationMs TargetFrameTime;
 	static struct optionsStruct& Options;
+	static DurationMs SpinThreshold;
+	static WelfordState SleepState;
+	static unsigned PrevSdlErrorCount;
+	static unsigned gfrOffset;
+	static float gfrWindow;
+	static int CursorIdleCounter;
 
 	static void RenderUi();
+	static void RenderFrameTimeDialog();
+	static void HybridSleep(DurationMs seconds);
+	static void MainLoop();
+	static void ImGuiMenuItemWShortcut(GameBindings binding, bool selected = false);
 };

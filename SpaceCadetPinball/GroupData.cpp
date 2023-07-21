@@ -6,7 +6,6 @@
 #include "fullscrn.h"
 #include "gdrv.h"
 #include "pb.h"
-#include "pinball.h"
 #include "zdrv.h"
 
 
@@ -47,7 +46,7 @@ void GroupData::AddEntry(EntryData* entry)
 			if (srcBmp->BitmapType == BitmapTypes::Spliced)
 			{
 				// Get rid of spliced bitmap early on, to simplify render pipeline
-				auto bmp = new gdrv_bitmap8(srcBmp->Width, srcBmp->Height, srcBmp->Width);
+				auto bmp = new gdrv_bitmap8(srcBmp->Width, srcBmp->Height, true);
 				auto zMap = new zmap_header_type(srcBmp->Width, srcBmp->Height, srcBmp->Width);
 				SplitSplicedBitmap(*srcBmp, *bmp, *zMap);
 
@@ -289,20 +288,26 @@ void DatFile::Finalize()
 		assertm(groupIndex < 0, "DatFile: pbmsg_ft is already in .dat");
 
 		// Load 3DPB font into dat to simplify pipeline
-		auto rcData = reinterpret_cast<const MsgFont*>(EmbeddedData::PB_MSGFT_bin);
+		auto rcData = reinterpret_cast<MsgFont*>(ImFontAtlas::DecompressCompressedBase85Data(
+			EmbeddedData::PB_MSGFT_bin_compressed_data_base85));
 		AddMsgFont(rcData, "pbmsg_ft");
+		IM_FREE(rcData);
 
 		// PINBALL2.MID is an alternative font provided in 3DPB data
-		/*auto file = pinball::make_path_name("PINBALL2.MID");
-		auto fileHandle = fopen(file.c_str(), "rb");
+		// Scaled down because it is too large for top text box
+		/*auto file = pb::make_path_name("PINBALL2.MID");
+		auto fileHandle = fopenu(file.c_str(), "rb");
 		fseek(fileHandle, 0, SEEK_END);
 		auto fileSize = static_cast<uint32_t>(ftell(fileHandle));
 		auto rcData = reinterpret_cast<MsgFont*>(new uint8_t[fileSize]);
 		fseek(fileHandle, 0, SEEK_SET);
 		fread(rcData, 1, fileSize, fileHandle);
 		fclose(fileHandle);
+		auto groupId = Groups.back()->GroupId + 1u;
 		AddMsgFont(rcData, "pbmsg_ft");
-		delete[] rcData;*/
+		delete[] rcData;
+		for (auto i = groupId; i < Groups.size(); i++)
+			Groups[i]->GetBitmap(0)->ScaleIndexed(0.84f, 0.84f);*/
 	}
 
 	for (auto group : Groups)
@@ -311,13 +316,13 @@ void DatFile::Finalize()
 	}
 }
 
-void DatFile::AddMsgFont(const MsgFont* font, const std::string& fontName)
+void DatFile::AddMsgFont(MsgFont* font, const std::string& fontName)
 {
 	auto groupId = Groups.back()->GroupId + 1;
-	auto ptrToData = reinterpret_cast<const char*>(font->Data);
+	auto ptrToData = reinterpret_cast<char*>(font->Data);
 	for (auto charInd = 32; charInd < 128; charInd++, groupId++)
 	{
-		auto curChar = reinterpret_cast<const MsgFontChar*>(ptrToData);
+		auto curChar = reinterpret_cast<MsgFontChar*>(ptrToData);
 		assertm(curChar->Width == font->CharWidths[charInd], "Score: mismatched font width");
 		ptrToData += curChar->Width * font->Height + 1;
 

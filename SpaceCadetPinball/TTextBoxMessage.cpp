@@ -2,12 +2,12 @@
 #include "TTextBoxMessage.h"
 #include "pb.h"
 
-TTextBoxMessage::TTextBoxMessage(const char* text, float time, int type)
+TTextBoxMessage::TTextBoxMessage(const char* text, float time, bool lowPriority)
 {
 	NextMessage = nullptr;
 	Time = time;
-	Type = type;
 	EndTicks = pb::time_ticks + static_cast<int>(time * 1000.0f);
+	LowPriority = lowPriority;
 	if (text)
 	{
 		const auto textLen = strlen(text) + 1;
