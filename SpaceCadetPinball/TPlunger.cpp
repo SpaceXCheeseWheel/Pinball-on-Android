@@ -72,6 +72,9 @@ int TPlunger::Message(MessageCode code, float value)
 		break;
 	case MessageCode::PlungerFeedBall:
 		{
+			// ANDROID_PORT TODO: Redo Ball-in-plunger detection logic. The current method will likely fail upon activation of multiball logic.
+			SpaceCadetPinballJNI::setBallInPlunger(true);
+
 			if (PinballTable->BallCountInRect(PinballTable->PlungerPosition, PinballTable->CollisionCompOffset * 1.2f))
 			{
 				timer::set(1.0f, this, BallFeedTimer);

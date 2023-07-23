@@ -282,6 +282,8 @@ void TPinballTable::ChangeBallCount(int count)
 	else
 	{
 		score::set(ScoreBallcount, MaxBallCount - count + 1);
+		// ANDROID_PORT
+		SpaceCadetPinballJNI::postBallCount(MaxBallCount - count + 1);
 		score::update(ScoreBallcount);
 	}
 }
@@ -317,6 +319,9 @@ void TPinballTable::port_draw()
 
 int TPinballTable::Message(MessageCode code, float value)
 {
+    // ANDROID_PORT
+    SpaceCadetPinballJNI::postRemainingBalls(ExtraBalls + BallCount);
+
 	const char* rc_text;
 
 	switch (code)
@@ -475,10 +480,13 @@ int TPinballTable::Message(MessageCode code, float value)
 			if (PlayerCount <= 1)
 			{
 				const char* textboxText;
-				if (Demo->ActiveFlag)
-					textboxText = pb::get_rc_string(Msg::STRING131);
-				else
-					textboxText = pb::get_rc_string(Msg::STRING127);
+				// ANDROID_PORT
+				//if (Demo->ActiveFlag)
+				//	textboxText = pb::get_rc_string(Msg::STRING131);
+				//else
+				//	textboxText = pb::get_rc_string(Msg::STRING127);
+				textboxText = pb::get_rc_string(Msg::STRING127);
+				// ANDROID_PORT_END
 				pb::InfoTextBox->Display(textboxText, -1.0);
 				break;
 			}

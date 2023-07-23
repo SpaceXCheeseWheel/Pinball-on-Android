@@ -47,6 +47,10 @@ constexpr int MIX_INIT_MID_Proxy =
 #endif
 
 // ANDROID_PORT
+#include "../app/src/main/cpp/SpaceCadetPinballJNI.h"
+
+
+// ANDROID_PORT
 /*
 //https://github.com/ocornut/imgui 59b63defe5421642fb0cdcfd1fa850fc85a13791 + patches
 #include "imgui.h"

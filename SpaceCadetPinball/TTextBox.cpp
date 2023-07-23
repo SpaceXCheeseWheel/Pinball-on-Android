@@ -73,6 +73,11 @@ void TTextBox::TimerExpired(int timerId, void* caller)
 
 void TTextBox::Clear(bool lowPriorityOnly)
 {
+	// ANDROID_PORT TODO: Redo text system based off of https://github.com/fexed/Pinball-on-Android/commit/1bdccb3bad3a682d5a9f939baed95a7df0fdc723
+    // ANDROID_PORT
+	SpaceCadetPinballJNI::clearText(1);
+	SpaceCadetPinballJNI::clearText(2);
+    // ANDROID_PORT_END
 	gdrv_bitmap8* bmp = BgBmp;
 	if (bmp)
 		gdrv::copy_bitmap(
@@ -104,6 +109,8 @@ void TTextBox::Clear(bool lowPriorityOnly)
 
 void TTextBox::Display(const char* text, float time, bool lowPriority)
 {
+    // ANDROID_PORT
+	SpaceCadetPinballJNI::displayText(text, 1);
 	if (!text)
 		return;
 

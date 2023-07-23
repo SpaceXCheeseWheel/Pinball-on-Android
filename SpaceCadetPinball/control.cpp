@@ -2199,6 +2199,9 @@ void control::SkillShotGate1Control(MessageCode code, TPinballComponent* caller)
 {
 	if (code == MessageCode::ControlCollision)
 	{
+        // ANDROID_PORT
+        SpaceCadetPinballJNI::setBallInPlunger(false);
+
 		lite200->Message(MessageCode::TLightTurnOnTimed, 5.0);
 		if (lite67->light_on())
 		{

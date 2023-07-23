@@ -93,6 +93,9 @@ void score::unload_msg_font()
 
 void score::erase(scoreStruct* score, int blitFlag)
 {
+	// ANDROID_PORT
+	SpaceCadetPinballJNI::postScore(0);
+
 	if (score)
 	{
 		if (score->BackgroundBmp)
@@ -131,6 +134,9 @@ void score::update(scoreStruct* score)
 		erase(score, 0);
 		if (score->Score >= 0)
 		{
+			// ANDROID_PORT
+			SpaceCadetPinballJNI::postScore(score->Score);
+
 			snprintf(scoreBuf, sizeof scoreBuf, "%d", score->Score);
 			for (ptrdiff_t index = strlen(scoreBuf) - 1; index >= 0; index--)
 			{

@@ -263,6 +263,8 @@ void pb::toggle_demo()
 void pb::replay_level(bool demoMode)
 {
 	demo_mode = demoMode;
+	// ANDROID_PORT
+	SpaceCadetPinballJNI::notifyGameState(SpaceCadetPinballJNI::GAMESTATE::RUNNING);
 	mode_change(GameModes::InGame);
 	if (options::Options.Music)
 		midi::music_play();
@@ -663,6 +665,8 @@ void pb::launch_ball()
 
 void pb::end_game()
 {
+	// ANDROID_PORT
+	SpaceCadetPinballJNI::notifyGameState(SpaceCadetPinballJNI::GAMESTATE::FINISHED);
 	int scores[4]{};
 	int scoreIndex[4]{};
 

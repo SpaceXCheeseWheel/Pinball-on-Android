@@ -54,6 +54,8 @@ int winmain::CursorIdleCounter = 0;
 
 int winmain::WinMain(LPCSTR lpCmdLine)
 {
+    // ANDROID_PORT
+	SpaceCadetPinballJNI::gameReady();
 	std::set_new_handler(memalloc_failure);
 
 	printf("Game version: %s\n", Version);
@@ -113,7 +115,7 @@ int winmain::WinMain(LPCSTR lpCmdLine)
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
 
 	auto prefPath = SDL_GetPrefPath("", "SpaceCadetPinball");
-	auto basePath = SDL_GetBasePath(); // TODO: ANDROID_PORT Fixme. Refer to https://github.com/fexed/Pinball-on-Android/commit/097c071e3ada1fba711f9dbe61e7f64ecc9a764b#diff-14e5013aef089051ac4b459e57f1593c8c7a045ad58f38c708bbb809e6f68c25L15
+	auto basePath = SDL_GetBasePath(); // ANDROID_PORT TODO: Refer to https://github.com/fexed/Pinball-on-Android/commit/097c071e3ada1fba711f9dbe61e7f64ecc9a764b#diff-14e5013aef089051ac4b459e57f1593c8c7a045ad58f38c708bbb809e6f68c25L15
 
 	// SDL mixer init
 	bool mixOpened = false, noAudio = strstr(lpCmdLine, "-noaudio") != nullptr;
