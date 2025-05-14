@@ -34,3 +34,13 @@ Some articles were written about this project! Thank you to everyone. Some artic
 | AmigaOS 4          | rjd324          | http://aminet.net/package/game/actio/spacecadetpinball-aos4                                                |
 
 Platforms covered by this project: Android.
+
+## Compiling
+
+Install the following:
+- Android Studio
+- cmake
+- ninja
+
+Download the source files
+`git clone `

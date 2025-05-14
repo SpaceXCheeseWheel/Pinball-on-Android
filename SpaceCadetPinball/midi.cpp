@@ -3,13 +3,13 @@
 
 
 #include "pb.h"
-#include "pinball.h"
 
 
 std::vector<Mix_Music*> midi::LoadedTracks{};
-Mix_Music *midi::track1, *midi::track2, *midi::track3, *midi::active_track, *midi::NextTrack;
-bool midi::SetNextTrackFlag;
+Mix_Music* midi::track1, * midi::track2, * midi::track3;
+MidiTracks midi::active_track, midi::NextTrack;
 int midi::Volume = MIX_MAX_VOLUME;
+bool midi::IsPlaying = false, midi::MixOpen = false;
 
 constexpr uint32_t FOURCC(uint8_t a, uint8_t b, uint8_t c, uint8_t d)
 {
@@ -31,33 +31,54 @@ int ToVariableLen(uint32_t value, uint32_t& dst)
 	return count;
 }
 
-int midi::play_pb_theme()
+void midi::music_play()
 {
-	// Todo: add support for tracks 2 and 3
-	return play_track(track1);
-}
-
-int midi::music_stop()
-{
-	if (active_track)
+	if (!IsPlaying)
 	{
-		active_track = nullptr;
-		Mix_HaltMusic();
+		IsPlaying = true;
+		play_track(NextTrack, true);
+		NextTrack = MidiTracks::None;
 	}
-
-	return true;
 }
 
-int midi::music_init(int volume)
+void midi::music_stop()
 {
+	if (IsPlaying)
+	{
+		IsPlaying = false;
+		NextTrack = active_track;
+		StopPlayback();
+	}
+}
+
+void midi::StopPlayback()
+{
+	if (active_track != MidiTracks::None)
+	{
+		if (MixOpen)
+			Mix_HaltMusic();
+		active_track = MidiTracks::None;
+	}
+}
+
+int midi::music_init(bool mixOpen, int volume)
+{
+	MixOpen = mixOpen;
 	SetVolume(volume);
-	active_track = nullptr;
+	active_track = MidiTracks::None;
+	NextTrack = MidiTracks::None;
+	IsPlaying = false;
+	track1 = track2 = track3 = nullptr;
 
 	if (pb::FullTiltMode)
 	{
 		track1 = load_track("TABA1");
 		track2 = load_track("TABA2");
 		track3 = load_track("TABA3");
+
+		// FT demo .006 has only one music track, but it is nearly 9 min. long
+		if (!track1 && pb::FullTiltDemoMode)
+			track1 = load_track("DEMO");
 	}
 	else
 	{
@@ -65,35 +86,33 @@ int midi::music_init(int volume)
 		track1 = load_track("PINBALL");
 	}
 
-	if (!track2)
-		track2 = track1;
-	if (!track3)
-		track3 = track1;
 	return track1 != nullptr;
 }
 
 void midi::music_shutdown()
 {
-	if (active_track)
-		Mix_HaltMusic();
+	music_stop();
 
 	for (auto midi : LoadedTracks)
 	{
 		Mix_FreeMusic(midi);
 	}
-	active_track = nullptr;
+	active_track = MidiTracks::None;
 	LoadedTracks.clear();
 }
 
 void midi::SetVolume(int volume)
 {
 	Volume = volume;
-	Mix_VolumeMusic(volume);
+	if (MixOpen)
+		Mix_VolumeMusic(volume);
 }
 
 Mix_Music* midi::load_track(std::string fileName)
 {
-	Mix_Music* audio = nullptr;
+	if (!MixOpen || pb::quickFlag)
+		return nullptr;
+
 	if (pb::FullTiltMode)
 	{
 		// FT sounds are in SOUND subfolder
@@ -101,38 +120,9 @@ Mix_Music* midi::load_track(std::string fileName)
 		fileName.insert(0, "SOUND");
 	}
 
-	// FT has music in two formats, depending on version: MIDI in 16bit, MIDS in 32bit.
-	// 3DPB music is MIDI only.
-	auto basePath = pinball::make_path_name(fileName);
-	for (int i = 0; i <= 1 && !audio; i++)
-	{
-		if (i == 0)
-		{
-			auto filePath = basePath + ".MID";
-			auto fileHandle = fopen(filePath.c_str(), "rb");
-			if (fileHandle)
-			{
-				fclose(fileHandle);
-				audio = Mix_LoadMUS(filePath.c_str());
-			}
-		}
-		else
-		{
-			auto midi = MdsToMidi(basePath + ".MDS");
-			if (midi)
-			{
-				// Dump converted MIDI file
-				/*auto filePath = basePath + ".midi";
-				FILE* fileHandle = fopen(filePath.c_str(), "wb");
-				fwrite(midi->data(), 1, midi->size(), fileHandle);
-				fclose(fileHandle);*/
-
-				auto rw = SDL_RWFromMem(midi->data(), static_cast<int>(midi->size()));
-				audio = Mix_LoadMUS_RW(rw, 1); // This call seems to leak memory no matter what.
-				delete midi;
-			}
-		}
-	}
+	auto audio = load_track_sub(fileName, true);
+	if (!audio)
+		audio = load_track_sub(fileName, false);
 
 	if (!audio)
 		return nullptr;
@@ -141,31 +131,107 @@ Mix_Music* midi::load_track(std::string fileName)
 	return audio;
 }
 
-bool midi::play_track(Mix_Music* midi)
+Mix_Music* midi::load_track_sub(std::string fileName, bool isMidi)
 {
-	music_stop();
-	if (!midi)
-		return false;
-
-	if (SetNextTrackFlag)
+	// FT has music in two formats, depending on game version: MIDI in 16bit, MIDS in 32bit.
+	// 3DPB music is MIDI only.
+	Mix_Music* audio = nullptr;
+	fileName += isMidi ? ".MID" : ".MDS";
+	for (int i = 0; i < 2; i++)
 	{
-		NextTrack = midi;
-		SetNextTrackFlag = false;
-		return true;
+		if (i == 1)
+			std::transform(fileName.begin(), fileName.end(), fileName.begin(),
+			               [](unsigned char c) { return std::tolower(c); });
+		if (isMidi)
+		{
+			auto filePath = pb::make_path_name(fileName);
+			auto fileHandle = fopenu(filePath.c_str(), "rb");
+			if (fileHandle)
+			{
+				fclose(fileHandle);
+				auto rw = SDL_RWFromFile(filePath.c_str(), "rb");
+				audio = Mix_LoadMUS_RW(rw, 1);
+				break;
+			}
+		}
+		else
+		{
+			auto midi = MdsToMidi(pb::make_path_name(fileName));
+			if (midi)
+			{
+				// Dump converted MIDI file
+				/*auto filePath = fileName + ".midi";
+				FILE* fileHandle = fopenu(filePath.c_str(), "wb");
+				fwrite(midi->data(), 1, midi->size(), fileHandle);
+				fclose(fileHandle);*/
+
+				auto rw = SDL_RWFromMem(midi->data(), static_cast<int>(midi->size()));
+				audio = Mix_LoadMUS_RW(rw, 1); // This call seems to leak memory no matter what.
+				delete midi;
+				break;
+			}
+		}
 	}
 
-	if (Mix_PlayMusic(midi, -1))
+	return audio;
+}
+
+bool midi::play_track(MidiTracks track, bool replay)
+{
+	auto midi = TrackToMidi(track);
+	if (!midi || (!replay && active_track == track))
+		return false;
+
+	StopPlayback();
+
+	if (!IsPlaying)
 	{
-		active_track = nullptr;
+		NextTrack = track;
 		return false;
 	}
+
+	if (MixOpen && Mix_PlayMusic(midi, -1))
+	{
+		active_track = MidiTracks::None;
+		return false;
+	}
+
 	// On Windows, MIDI volume can only be set during playback.
 	// And it changes application master volume for some reason.
-	// SetVolume(Volume);
-	active_track = midi;
+	SetVolume(Volume);
+	active_track = track;
 	return true;
 }
 
+MidiTracks midi::get_active_track()
+{
+	if (!IsPlaying)
+		return NextTrack;
+	else
+		return active_track;
+}
+
+Mix_Music* midi::TrackToMidi(MidiTracks track)
+{
+	Mix_Music* midi;
+	switch (track)
+	{
+	default:
+	case MidiTracks::None:
+		midi = nullptr;
+		break;
+	case MidiTracks::Track1:
+		midi = track1;
+		break;
+	case MidiTracks::Track2:
+		midi = track2;
+		break;
+	case MidiTracks::Track3:
+		midi = track3;
+		break;
+	}
+	return midi;
+}
 
 /// <summary>
 /// SDL_mixed does not support MIDS. To support FT music, a conversion to MIDI is required.
@@ -174,13 +240,14 @@ bool midi::play_track(Mix_Music* midi)
 /// <returns>Vector that contains MIDI file</returns>
 std::vector<uint8_t>* midi::MdsToMidi(std::string file)
 {
-	auto fileHandle = fopen(file.c_str(), "rb");
+	auto fileHandle = fopenu(file.c_str(), "rb");
 	if (!fileHandle)
 		return nullptr;
 
 	fseek(fileHandle, 0, SEEK_END);
 	auto fileSize = static_cast<uint32_t>(ftell(fileHandle));
-	auto fileBuf = reinterpret_cast<riff_header*>(new uint8_t [fileSize]);
+	auto buffer = new uint8_t[fileSize];
+	auto fileBuf = reinterpret_cast<riff_header*>(buffer);
 	fseek(fileHandle, 0, SEEK_SET);
 	fread(fileBuf, 1, fileSize, fileHandle);
 	fclose(fileHandle);
@@ -280,8 +347,7 @@ std::vector<uint8_t>* midi::MdsToMidi(std::string file)
 			// Delta time is in variable quantity, Big Endian
 			uint32_t deltaVarLen;
 			auto count = ToVariableLen(delta, deltaVarLen);
-			deltaVarLen = SwapByteOrderInt(deltaVarLen);
-			auto deltaData = reinterpret_cast<const uint8_t*>(&deltaVarLen) + 4 - count;
+			auto deltaData = reinterpret_cast<const uint8_t*>(&deltaVarLen);
 			midiBytes.insert(midiBytes.end(), deltaData, deltaData + count);
 
 			switch (event.iEvent >> 24)
@@ -325,8 +391,8 @@ std::vector<uint8_t>* midi::MdsToMidi(std::string file)
 	}
 	while (false);
 
-	delete[] fileBuf;
-	if (returnCode && midiOut) 
+	delete[] buffer;
+	if (returnCode && midiOut)
 	{
 		delete midiOut;
 		midiOut = nullptr;

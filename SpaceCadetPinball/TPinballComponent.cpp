@@ -1,8 +1,12 @@
 #include "pch.h"
 #include "TPinballComponent.h"
+
+#include "control.h"
 #include "loader.h"
+#include "proj.h"
 #include "render.h"
 #include "TPinballTable.h"
+#include "TTableLayer.h"
 
 TPinballComponent::TPinballComponent(TPinballTable* table, int groupIndex, bool loadVisuals)
 {
@@ -14,47 +18,45 @@ TPinballComponent::TPinballComponent(TPinballTable* table, int groupIndex, bool 
 	PinballTable = table;
 	RenderSprite = nullptr;
 	ListBitmap = nullptr;
-	ListZMap = nullptr;
 	GroupName = nullptr;
 	Control = nullptr;
+	VisualPosNormX= -1.0f;
+	VisualPosNormY = -1.0f;
+	GroupIndex = groupIndex;
 	if (table)
 		table->ComponentList.push_back(this);
 	if (groupIndex >= 0)
 		GroupName = loader::query_name(groupIndex);
+
 	if (loadVisuals && groupIndex >= 0)
 	{
 		int visualCount = loader::query_visual_states(groupIndex);
 		for (int index = 0; index < visualCount; ++index)
 		{
 			loader::query_visual(groupIndex, index, &visual);
-			if (visual.Bitmap)
+			if (visual.Bitmap.Bmp)
 			{
+				assertm(visual.Bitmap.ZMap, "Bitmap/zMap pairing is mandatory");
 				if (!ListBitmap)
-					ListBitmap = new std::vector<gdrv_bitmap8*>();
-				if (ListBitmap)
-					ListBitmap->push_back(visual.Bitmap);
-			}
-			if (visual.ZMap)
-			{
-				if (!ListZMap)
-					ListZMap = new std::vector<zmap_header_type*>();
-				if (ListZMap)
-					ListZMap->push_back(visual.ZMap);
+					ListBitmap = new std::vector<SpriteData>();
+				ListBitmap->push_back(visual.Bitmap);
 			}
 		}
 
-		auto zMap = ListZMap ? ListZMap->at(0) : nullptr;
 		if (ListBitmap)
 		{
 			rectangle_type bmp1Rect{}, tmpRect{};
-			auto rootBmp = ListBitmap->at(0);
+			const auto rootSprite = ListBitmap->at(0);
+			const auto rootBmp = rootSprite.Bmp;
+
 			bmp1Rect.XPosition = rootBmp->XPosition - table->XOffset;
 			bmp1Rect.YPosition = rootBmp->YPosition - table->YOffset;
 			bmp1Rect.Width = rootBmp->Width;
 			bmp1Rect.Height = rootBmp->Height;
+
 			for (auto index = 1u; index < ListBitmap->size(); index++)
 			{
-				auto bmp = ListBitmap->at(index);
+				auto bmp = ListBitmap->at(index).Bmp;
 				tmpRect.XPosition = bmp->XPosition - table->XOffset;
 				tmpRect.YPosition = bmp->YPosition - table->YOffset;
 				tmpRect.Width = bmp->Width;
@@ -62,16 +64,23 @@ TPinballComponent::TPinballComponent(TPinballTable* table, int groupIndex, bool 
 				maths::enclosing_box(bmp1Rect, tmpRect, bmp1Rect);
 			}
 
-			RenderSprite = render::create_sprite(
-				visualCount > 0 ? VisualTypes::Sprite : VisualTypes::None,
+			RenderSprite = new render_sprite(
+				VisualTypes::Sprite,
 				rootBmp,
-				zMap,
+				rootSprite.ZMap,
 				rootBmp->XPosition - table->XOffset,
 				rootBmp->YPosition - table->YOffset,
 				&bmp1Rect);
+
+			// Sound position = center of root visual, reverse-projected, normalized.
+			auto& rect = RenderSprite->BmpRect;
+			vector2i pos2D{ rect.XPosition + rect.Width / 2, rect.YPosition + rect.Height / 2 };
+			auto pos3D = proj::ReverseXForm(pos2D);
+			auto posNorm = TTableLayer::edge_manager->NormalizeBox(pos3D);
+			VisualPosNormX = posNorm.X;
+			VisualPosNormY = posNorm.Y;
 		}
 	}
-	GroupIndex = groupIndex;
 }
 
 
@@ -87,14 +96,13 @@ TPinballComponent::~TPinballComponent()
 	}
 
 	delete ListBitmap;
-	delete ListZMap;
 }
 
 
-int TPinballComponent::Message(int code, float value)
+int TPinballComponent::Message(MessageCode code, float value)
 {
-	MessageField = code;
-	if (code == 1024)
+	MessageField = static_cast<int>(code);
+	if (code == MessageCode::Reset)
 		MessageField = 0;
 	return 0;
 }
@@ -103,11 +111,55 @@ void TPinballComponent::port_draw()
 {
 }
 
-void TPinballComponent::put_scoring(int index, int score)
+int TPinballComponent::get_scoring(unsigned int index) const
 {
+	return Control == nullptr || index >= Control->ScoreCount ? 0 : Control->Scores[index];
 }
 
-int TPinballComponent::get_scoring(int index)
+vector2 TPinballComponent::get_coordinates()
 {
-	return 0;
+	return {VisualPosNormX, VisualPosNormY};
+}
+
+void TPinballComponent::SpriteSet(int index) const
+{
+	if (!ListBitmap)
+		return;
+
+	int xPos, yPos;
+	gdrv_bitmap8* bmp;
+	zmap_header_type* zMap;
+	if (index >= 0)
+	{
+		auto& spriteData = ListBitmap->at(index);
+		bmp = spriteData.Bmp;
+		zMap = spriteData.ZMap;
+		xPos = bmp->XPosition - PinballTable->XOffset;
+		yPos = bmp->YPosition - PinballTable->YOffset;
+	}
+	else
+	{
+		bmp = nullptr;
+		zMap = nullptr;
+		xPos = RenderSprite->BmpRect.XPosition;
+		yPos = RenderSprite->BmpRect.YPosition;
+	}
+
+	RenderSprite->set(bmp, zMap, xPos, yPos);
+}
+
+void TPinballComponent::SpriteSetBall(int index, vector2i pos, float depth) const
+{
+	if (ListBitmap)
+	{
+		gdrv_bitmap8* bmp = nullptr;
+		if (index >= 0)
+		{
+			bmp = ListBitmap->at(index).Bmp;
+			pos.X -= bmp->Width / 2;
+			pos.Y -= bmp->Height / 2;
+		}
+		
+		RenderSprite->ball_set(bmp, depth, pos.X, pos.Y);
+	}
 }

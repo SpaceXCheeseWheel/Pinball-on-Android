@@ -19,13 +19,12 @@ TKickback::TKickback(TPinballTable* table, int groupIndex): TCollisionComponent(
 	Threshold = 1000000000.0f;
 }
 
-int TKickback::Message(int code, float value)
+int TKickback::Message(MessageCode code, float value)
 {
-	if ((code == 1011 || code == 1024) && Timer)
+	if ((code == MessageCode::SetTiltLock || code == MessageCode::Reset) && Timer)
 	{
 		timer::kill(Timer);
-		if (ListBitmap)
-			render::sprite_set_bitmap(RenderSprite, nullptr);
+		SpriteSet(-1);
 		Timer = 0;
 		KickActiveFlag = 0;
 		Threshold = 1000000000.0;
@@ -33,7 +32,7 @@ int TKickback::Message(int code, float value)
 	return 0;
 }
 
-void TKickback::Collision(TBall* ball, vector2* nextPosition, vector2* direction, float coef,
+void TKickback::Collision(TBall* ball, vector2* nextPosition, vector2* direction, float distance,
                           TEdgeSegment* edge)
 {
 	if (PinballTable->TiltLockFlag)
@@ -62,33 +61,13 @@ void TKickback::TimerExpired(int timerId, void* caller)
 	{
 		kick->Threshold = 0.0;
 		kick->Timer = timer::set(kick->TimerTime2, kick, TimerExpired);
-		loader::play_sound(kick->HardHitSoundId);
-		if (kick->ListBitmap)
-		{
-			auto bmp = kick->ListBitmap->at(1);
-			auto zMap = kick->ListZMap->at(1);
-			render::sprite_set(
-				kick->RenderSprite,
-				bmp,
-				zMap,
-				bmp->XPosition - kick->PinballTable->XOffset,
-				bmp->YPosition - kick->PinballTable->YOffset);
-		}
+		loader::play_sound(kick->HardHitSoundId, kick, "TKickback");
+		kick->SpriteSet(1);
 	}
 	else
 	{
-		if (kick->ListBitmap)
-		{
-			auto bmp = kick->ListBitmap->at(0);
-			auto zMap = kick->ListZMap->at(0);
-			render::sprite_set(
-				kick->RenderSprite,
-				bmp,
-				zMap,
-				bmp->XPosition - kick->PinballTable->XOffset,
-				bmp->YPosition - kick->PinballTable->YOffset);
-		}
+		kick->SpriteSet(0);
 		kick->Timer = 0;
-		control::handler(60, kick);
+		control::handler(MessageCode::ControlTimerExpired, kick);
 	}
 }
